@@ -3,7 +3,7 @@ title: "David Nield"
 page-layout: full
 about:
   template: jolla
-  image: files/profile.jpg
+  image: files/Nield_David_543-B-0420-retouched-cropped.png
   links: 
     - icon: envelope
       text: Contact me

@@ -1,0 +1,17 @@
+---
+title: "Chess openings"
+description: "How popular each chess opening is on Lichess, who chooses it, and how often you'd meet it compared with your opponent."
+---
+
+An interactive opening dashboard is coming soon.
+
+For any of the roughly 3,800 named openings, it will show:
+
+- how often games reach the opening, over time;
+- whether White or Black is the one choosing it;
+- how often *you* would see it compared with your opponent.
+
+<!--
+This page is a placeholder slot. tools/sync_openings.ps1 copies the built page and data from the
+Chess Opening Dashboard repo (dashboard/) into this folder, replacing this file.
+-->

@@ -4,6 +4,8 @@ project:
 
 website:
   # title: "Personal Website"
+  title: "David Nield"
+  site-url: "https://dnield.com"
   favicon: files/profile.jpg
   twitter-card:
     creator: "@DRNield"
@@ -13,8 +15,13 @@ website:
     locale: en_US
   google-analytics: "G-EZ5WZFDWDZ"
   navbar:
+    title: false
     left:
       - href: index.qmd
+      - text: Blog
+        href: blog.qmd
+      - text: Openings
+        href: openings/index.qmd
       - text: Resume
         href: files/resume.pdf
 

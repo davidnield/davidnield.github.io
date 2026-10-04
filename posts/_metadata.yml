@@ -1,0 +1,12 @@
+# Shared defaults for every post under posts/<slug>/index.qmd.
+# A post's own frontmatter overrides anything here.
+#
+# Per-post frontmatter convention (see the quarto-publishing skill):
+#   title, description (the listing summary), date, categories, image (listing card).
+#
+# Drafts: every post starts as a draft. A draft is left out of the Blog listing,
+# the feed, the sitemap and search. To publish a post, set `draft: false` in its
+# own frontmatter.
+author: "David Nield"
+draft: true
+toc: true

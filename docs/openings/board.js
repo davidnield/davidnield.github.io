@@ -1,20 +1,21 @@
-// A small chessboard input for the opening dashboard. Plain SVG + chess.js
-// (BSD-2-Clause) for legality and SAN; no board or piece-set code from
-// elsewhere. Pieces are Unicode chess glyphs drawn as SVG text (no piece
-// artwork is shipped), so there is nothing GPL in the page.
+// A small chessboard input for the opening dashboard: plain SVG, with
+// chess.js (BSD-2-Clause) for legality and SAN. No board code from elsewhere.
+// Pieces are the Cburnett set (Colin M.L. Burnett, via Wikimedia Commons, used
+// under the BSD licence; see pieces/LICENSE.txt and pieces/SOURCES.json),
+// served unmodified from pieces/. Colours follow Lichess's default brown theme.
 //
-//   const el = createBoard({ Chess, moves: ["e4", "e5"] });
+//   const el = createBoard({ Chess, moves: ["e4", "e5"], pieceBase: "pieces/" });
 //   el.value          // SAN moves up to the cursor (the position shown)
 //   el.setLine(moves) // replace the line and move the cursor to its end
 //   el.addEventListener("input", ...)   // fired on every change
 //
-// Click a piece then a square, or drag it. Promotion is to a queen. The
-// buttons step through the line; the move list jumps to any ply.
+// Click a piece then a square, or drag it. A pawn reaching the last rank
+// opens a picker (queen, knight, rook, bishop). The buttons step through the
+// line; the move list jumps to any ply; arrow keys step when the board has focus.
 
-const GLYPH = { k: "♚", q: "♛", r: "♜", b: "♝", n: "♞", p: "♟" };
-const VS15 = "︎"; // text presentation (stops the pawn rendering as an emoji)
 const FILES = "abcdefgh";
 const NS = "http://www.w3.org/2000/svg";
+const PROMO = ["q", "n", "r", "b"];   // Lichess's picker order
 
 function svg(tag, attrs = {}, parent) {
   const el = document.createElementNS(NS, tag);
@@ -23,13 +24,17 @@ function svg(tag, attrs = {}, parent) {
   return el;
 }
 
-export function createBoard({ Chess, moves = [], orientation = "white" } = {}) {
+export function createBoard({ Chess, moves = [], orientation = "white", pieceBase = "pieces/" } = {}) {
   let line = [];
   let ply = 0;
   let flipped = orientation === "black";
   let selected = null;
   let drag = null;
+  let promo = null;   // { from, to, color } while the promotion picker is open
   let game = new Chess();
+  const src = (p) => `${pieceBase}Chess_${p.type}${p.color === "w" ? "l" : "d"}t45.svg`;
+  // warm the cache so the first drawn position has its pieces
+  for (const t of "kqrbnp") for (const c of "wb") { const i = new Image(); i.src = src({ type: t, color: c }); }
 
   const root = document.createElement("div");
   root.className = "cb";
@@ -38,7 +43,8 @@ export function createBoard({ Chess, moves = [], orientation = "white" } = {}) {
   root.appendChild(boardWrap);
   const board = svg("svg", { viewBox: "0 0 8 8", role: "img", "aria-label": "chessboard", tabindex: "0" });
   boardWrap.appendChild(board);
-  const gSquares = svg("g", {}, board), gMarks = svg("g", {}, board), gPieces = svg("g", {}, board), gDrag = svg("g", {}, board);
+  const gSquares = svg("g", {}, board), gMarks = svg("g", {}, board), gPieces = svg("g", {}, board),
+    gDrag = svg("g", {}, board), gPromo = svg("g", {}, board);
 
   const bar = document.createElement("div");
   bar.className = "cb-bar";
@@ -87,17 +93,12 @@ export function createBoard({ Chess, moves = [], orientation = "white" } = {}) {
     return h[h.length - 1];
   }
 
-  function pieceText(p, x, y, parent, extra = {}) {
-    const t = svg("text", {
-      x: x + 0.5, y: y + 0.54, "text-anchor": "middle", "dominant-baseline": "central",
-      class: `cb-piece cb-${p.color === "w" ? "white" : "black"}`, ...extra,
-    }, parent);
-    t.textContent = GLYPH[p.type] + VS15;
-    return t;
+  function pieceImg(p, x, y, parent, cls = "cb-piece") {
+    return svg("image", { href: src(p), x, y, width: 1, height: 1, class: cls }, parent);
   }
 
   function draw() {
-    gSquares.replaceChildren(); gMarks.replaceChildren(); gPieces.replaceChildren(); gDrag.replaceChildren();
+    gSquares.replaceChildren(); gMarks.replaceChildren(); gPieces.replaceChildren(); gDrag.replaceChildren(); gPromo.replaceChildren();
     const lm = lastMove();
     for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
       const sq = xySq(x, y);
@@ -105,33 +106,58 @@ export function createBoard({ Chess, moves = [], orientation = "white" } = {}) {
       if (lm && (sq === lm.from || sq === lm.to)) svg("rect", { x, y, width: 1, height: 1, class: "cb-last" }, gSquares);
       if (sq === selected) svg("rect", { x, y, width: 1, height: 1, class: "cb-sel" }, gSquares);
     }
-    // coordinates on the edge squares
+    // coordinates in the corners of the edge squares, in the opposite square colour
     for (let i = 0; i < 8; i++) {
       const fileSq = xySq(i, 7), rankSq = xySq(0, i);
-      const tf = svg("text", { x: i + 0.94, y: 7.93, class: `cb-coord ${(i + 7) % 2 ? "on-dark" : "on-light"}`, "text-anchor": "end" }, gSquares);
+      const tf = svg("text", { x: i + 0.95, y: 7.95, class: `cb-coord ${(i + 7) % 2 ? "on-dark" : "on-light"}`, "text-anchor": "end" }, gSquares);
       tf.textContent = fileSq[0];
-      const tr = svg("text", { x: 0.05, y: i + 0.22, class: `cb-coord ${i % 2 ? "on-dark" : "on-light"}` }, gSquares);
+      const tr = svg("text", { x: 0.05, y: i + 0.21, class: `cb-coord ${i % 2 ? "on-dark" : "on-light"}` }, gSquares);
       tr.textContent = rankSq[1];
     }
     if (selected) {
+      const seen = new Set();
       for (const m of game.moves({ square: selected, verbose: true })) {
+        if (seen.has(m.to)) continue;   // four promotion moves share a square
+        seen.add(m.to);
         const [x, y] = sqXY(m.to);
-        if (m.captured) svg("circle", { cx: x + 0.5, cy: y + 0.5, r: 0.44, class: "cb-hint-cap" }, gMarks);
-        else svg("circle", { cx: x + 0.5, cy: y + 0.5, r: 0.14, class: "cb-hint" }, gMarks);
+        if (m.captured) svg("circle", { cx: x + 0.5, cy: y + 0.5, r: 0.46, class: "cb-hint-cap" }, gMarks);
+        else svg("circle", { cx: x + 0.5, cy: y + 0.5, r: 0.13, class: "cb-hint" }, gMarks);
       }
     }
-    const rows = game.board();
-    for (const row of rows) for (const p of row) {
+    for (const row of game.board()) for (const p of row) {
       if (!p) continue;
       if (drag && drag.from === p.square) continue;
+      if (promo && promo.from === p.square) continue;
       const [x, y] = sqXY(p.square);
-      pieceText(p, x, y, gPieces);
+      pieceImg(p, x, y, gPieces);
     }
-    if (drag && drag.piece) pieceText(drag.piece, drag.x - 0.5, drag.y - 0.5, gDrag, { class: `cb-piece cb-${drag.piece.color === "w" ? "white" : "black"} cb-dragging` });
+    if (drag && drag.piece) pieceImg(drag.piece, drag.x - 0.5, drag.y - 0.5, gDrag, "cb-piece cb-dragging");
+    if (promo) drawPromo();
     drawList();
     bStart.disabled = bBack.disabled = ply === 0;
     bFwd.disabled = bEnd.disabled = ply >= line.length;
   }
+
+  // The picker: four pieces down the target file from the promotion square
+  // towards the middle of the board, over a dimmed board (as on Lichess).
+  function drawPromo() {
+    svg("rect", { x: 0, y: 0, width: 8, height: 8, class: "cb-dim" }, gPromo);
+    const [x, y0] = sqXY(promo.to);
+    const dir = y0 === 0 ? 1 : -1;
+    PROMO.forEach((t, i) => {
+      const y = y0 + dir * i;
+      const g = svg("g", { class: "cb-promo", "data-piece": t }, gPromo);
+      svg("circle", { cx: x + 0.5, cy: y + 0.5, r: 0.5, class: "cb-promo-bg" }, g);
+      pieceImg({ type: t, color: promo.color }, x + 0.08, y + 0.08, g).setAttribute("width", 0.84);
+      g.lastChild.setAttribute("height", 0.84);
+    });
+  }
+  const promoAt = (sq) => {
+    if (!promo || !sq) return null;
+    const [x, y] = sqXY(sq), [px, y0] = sqXY(promo.to);
+    const dir = y0 === 0 ? 1 : -1, i = (y - y0) * dir;
+    return x === px && i >= 0 && i < 4 ? PROMO[i] : null;
+  };
 
   function drawList() {
     list.replaceChildren();
@@ -154,33 +180,49 @@ export function createBoard({ Chess, moves = [], orientation = "white" } = {}) {
   function goto(k) {
     k = Math.max(0, Math.min(line.length, k));
     if (k === ply) return;
-    ply = k; selected = null; rebuild(); draw(); emit();
+    ply = k; selected = null; promo = null; rebuild(); draw(); emit();
   }
 
   function setLine(moves, notify = true) {
     // keep only the legal prefix of what we were given
     const g = new Chess(), ok = [];
     for (const m of moves || []) { try { ok.push(g.move(m).san); } catch { break; } }
-    line = ok; ply = ok.length; selected = null; game = g;
+    line = ok; ply = ok.length; selected = null; promo = null; game = g;
     draw();
     root.value = line.slice(0, ply);
     if (notify) root.dispatchEvent(new Event("input", { bubbles: true }));
   }
 
-  function tryMove(from, to) {
+  // Returns true when the move was played or the promotion picker opened.
+  function tryMove(from, to, promotion) {
+    const cands = game.moves({ square: from, verbose: true }).filter((m) => m.to === to);
+    if (!cands.length) return false;
+    if (cands.some((m) => m.promotion) && !promotion) {
+      promo = { from, to, color: game.turn() };
+      selected = null;
+      draw();
+      return true;
+    }
     let mv = null;
-    try { mv = game.move({ from, to, promotion: "q" }); } catch { mv = null; }
+    try { mv = game.move({ from, to, promotion }); } catch { mv = null; }
     if (!mv) return false;
     // a new move at the cursor replaces the rest of the line, unless it IS the next move
     if (line[ply] === mv.san) ply += 1;
     else { line = line.slice(0, ply).concat(mv.san); ply = line.length; }
-    selected = null;
+    selected = null; promo = null;
     rebuild(); draw(); emit();
     return true;
   }
 
   board.addEventListener("pointerdown", (ev) => {
     const { x, y, sq } = pointSq(ev);
+    if (promo) {   // the picker is modal: choose a piece, or click elsewhere to cancel
+      const t = promoAt(sq);
+      const { from, to } = promo;
+      promo = null;
+      if (!(t && tryMove(from, to, t))) draw();
+      return;
+    }
     if (!sq) return;
     const p = game.get(sq);
     if (selected && selected !== sq && (!p || p.color !== game.turn())) {
@@ -199,7 +241,7 @@ export function createBoard({ Chess, moves = [], orientation = "white" } = {}) {
     if (Math.hypot(x - drag.x0, y - drag.y0) > 0.15) drag.moved = true;
     drag.x = x; drag.y = y;
     gDrag.replaceChildren();
-    pieceText(drag.piece, x - 0.5, y - 0.5, gDrag, { class: `cb-piece cb-${drag.piece.color === "w" ? "white" : "black"} cb-dragging` });
+    pieceImg(drag.piece, x - 0.5, y - 0.5, gDrag, "cb-piece cb-dragging");
   });
   const endDrag = (ev) => {
     if (!drag) return;
@@ -214,6 +256,7 @@ export function createBoard({ Chess, moves = [], orientation = "white" } = {}) {
   board.addEventListener("keydown", (ev) => {
     if (ev.key === "ArrowLeft") { goto(ply - 1); ev.preventDefault(); }
     if (ev.key === "ArrowRight") { goto(ply + 1); ev.preventDefault(); }
+    if (ev.key === "Escape" && promo) { promo = null; draw(); }
   });
 
   root.setLine = setLine;

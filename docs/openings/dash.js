@@ -2,10 +2,13 @@
 // attribution. Mirrors python/build_opening_series.py operation for operation
 // (same sums, same product order), which is what gate 4 checks to 1e-9.
 //
-// Data (python/build_site_data.py):
-//   data/index.json      months, slices, N, path edges, openings
-//   data/nodes/<id>.json T (games continuing), A (arrivals), in {edge: n}
-// A series is sparse runs [slice, firstMonth, v0, v1, ...].
+// Data (python/build_site_data.py, format 2):
+//   data/index.json      months, slices, N, root node, named openings
+//   data/nodes/<id>.json one position: T (games continuing), D = A - T (or A),
+//                        in [[parent, SAN, n]] (edges into it), out [[SAN,
+//                        child, all-time results]] (edges out of it)
+//   data/positions.json  lazy: FEN-prefix key -> node, for re-entering the tree
+// A series is sparse runs [slice, firstMonth, code].
 
 export const Z95 = 1.959963984540054;
 export const MIN_T = 30;
@@ -150,24 +153,43 @@ export function attribution(ser, m0, m1, baselineMonths = 12) {
 
 // ---------------------------------------------------------------- loading
 
+// Run codes for a short tuple (the all-time results [w, d, b]).
+function decodeTuple(code) {
+  const out = new Float64Array(8);
+  const k = addRun(code, out, 0);
+  return Array.from(out.slice(0, k));
+}
+
+// The key positions.json uses: FEN placement, side to move, castling (and the
+// en-passant field only for the few S positions that differ in nothing else).
+export const posKey3 = (fen) => fen.split(" ").slice(0, 3).join(" ");
+export const posKey4 = (fen) => fen.split(" ").slice(0, 4).join(" ");
+
 export function makeStore(base) {
   const cache = new Map();
+  let positions = null;
   const getJSON = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); });
   const store = {
     index: null,
     async loadIndex() {
       if (!store.index) {
         const ix = await getJSON(`${base}/index.json`);
-        // Stored as [eco, name, prefix, extra edges, rank]; expand to
-        // [id, eco, name, edge ids, rank] with each path = prefix path + extra.
-        const raw = ix.openings, full = new Array(raw.length);
-        const path = (i) => {
-          if (!full[i]) { const [, , pre, extra] = raw[i]; full[i] = (pre >= 0 ? path(pre) : []).concat(extra); }
-          return full[i];
+        // Stored as [eco, name, prefix, "extra SAN", rank, final node]; expand to
+        // objects whose moves = prefix's moves + extra.
+        const raw = ix.openings, moves = new Array(raw.length);
+        const mv = (i) => {
+          if (!moves[i]) { const [, , pre, extra] = raw[i]; moves[i] = (pre >= 0 ? mv(pre) : []).concat(extra ? extra.split(" ") : []); }
+          return moves[i];
         };
-        ix.openings = raw.map((o, i) => [i, o[0], o[1], path(i), o[4]]);
-        ix.byId = new Map(ix.openings.map((o) => [o[0], o]));
-        ix.pgn = (o) => o[3].map((e, i) => (i % 2 === 0 ? `${i / 2 + 1}. ` : "") + ix.edges[e][2]).join(" ");
+        ix.openings = raw.map((o, i) => ({ id: i, eco: o[0], name: o[1], moves: mv(i), rank: o[4], final: o[5] }));
+        ix.byId = new Map(ix.openings.map((o) => [o.id, o]));
+        // named openings ending at each node (a position can carry several names)
+        ix.namesAt = new Map();
+        for (const o of ix.openings) {
+          if (!ix.namesAt.has(o.final)) ix.namesAt.set(o.final, []);
+          ix.namesAt.get(o.final).push(o);
+        }
+        ix.pgn = (moves) => moves.map((m, i) => (i % 2 === 0 ? `${i / 2 + 1}. ` : "") + m).join(" ");
         store.index = ix;
       }
       return store.index;
@@ -176,30 +198,79 @@ export function makeStore(base) {
       if (!cache.has(id)) cache.set(id, getJSON(`${base}/nodes/${id}.json`));
       return cache.get(id);
     },
-    // Summed counts for one opening and slice selection.
-    async counts(openingId, speeds, bands) {
+    async positions() {
+      if (!positions) positions = getJSON(`${base}/positions.json`);
+      return positions;
+    },
+    // Position key (from a FEN) -> node id, or null when outside the tree.
+    async nodeOfFen(fen) {
+      const p = await store.positions();
+      return p[posKey4(fen)] ?? p[posKey3(fen)] ?? null;
+    },
+    // Follow SAN moves from the start along tree edges. inTree = how many of
+    // the moves stay in the tree; panels use exactly that prefix (the Python
+    // reference, build_opening_series.line_edges, does the same).
+    async resolve(moves) {
       const ix = await store.loadIndex();
-      const o = ix.byId.get(openingId);
-      const eids = o[3];
+      let v = ix.root;
+      const edges = [];
+      for (const m of moves) {
+        const nd = await store.node(v);
+        const hit = (nd.out || []).find((o) => o[0] === m);
+        if (!hit) break;
+        edges.push({ parent: v, san: m, child: hit[1] });
+        v = hit[1];
+      }
+      return { edges, node: v, inTree: edges.length };
+    },
+    // Summed counts along an in-tree chain of edges for a slice selection.
+    async countsFor(edges, speeds, bands) {
+      const ix = await store.loadIndex();
       const mask = sliceMask(ix, speeds, bands);
       const M = ix.n_months;
-      const parents = eids.map((e) => ix.edges[e][0]);
-      const children = eids.map((e) => ix.edges[e][1]);
-      const nodes = await Promise.all([...parents, children[children.length - 1]].map((v) => store.node(v)));
-      const kids = await Promise.all(children.map((v) => store.node(v)));
+      const parents = await Promise.all(edges.map((e) => store.node(e.parent)));
+      const kids = await Promise.all(edges.map((e) => store.node(e.child)));
+      const fin = kids[kids.length - 1];
+      const Tfin = sumRuns(fin.T, mask, M);
+      let A;
+      if (fin.A) A = sumRuns(fin.A, mask, M);
+      else { const D = sumRuns(fin.D, mask, M); A = new Float64Array(M); for (let m = 0; m < M; m++) A[m] = Tfin[m] + D[m]; }
       return {
         N: sumRuns(ix.N, mask, M),
-        T: nodes.slice(0, eids.length).map((nd) => sumRuns(nd.T, mask, M)),
-        n: eids.map((e, i) => sumRuns(kids[i].in[String(e)], mask, M)),
-        A: sumRuns(nodes[eids.length].A, mask, M),
-        edges: eids.map((e) => ix.edges[e]),
+        T: parents.map((nd) => sumRuns(nd.T, mask, M)),
+        n: edges.map((e, i) => sumRuns(kids[i].in.find((r) => r[0] === e.parent && r[1] === e.san)[2], mask, M)),
+        A,
+        edges,
       };
     },
-    // Everything the page shows; also the gate-4 hook (NaN -> null for JSON).
-    async compute(openingId, speeds, bands, m0, m1, smooth) {
-      const cnt = await store.counts(openingId, speeds, bands);
+    // Everything the panels show for a line; null when no move is in the tree.
+    async compute(moves, speeds, bands, m0, m1, smooth) {
+      const line = await store.resolve(moves);
+      if (!line.inTree) return { line, cnt: null };
+      const cnt = await store.countsFor(line.edges, speeds, bands);
       const ser = monthly(cnt, smooth);
-      return { cnt, ser, att: attribution(ser, m0, m1), win: windowSummary(cnt, m0, m1) };
+      return { line, cnt, ser, att: attribution(ser, m0, m1), win: windowSummary(cnt, m0, m1) };
+    },
+    // The explorer table at one position over months m0..m1 (selected slices):
+    // each tree edge out of it with games and share of T, "other moves" =
+    // T minus the stored edges, and all-time results for the selected slices.
+    async explorer(nodeId, speeds, bands, m0, m1) {
+      const ix = await store.loadIndex();
+      const mask = sliceMask(ix, speeds, bands);
+      const M = ix.n_months;
+      const nd = await store.node(nodeId);
+      const win = (x) => { let t = 0; for (let m = m0; m <= m1; m++) t += x[m]; return t; };
+      const T = win(sumRuns(nd.T, mask, M));
+      const outs = nd.out || [];
+      const kids = await Promise.all(outs.map((o) => store.node(o[1])));
+      const rows = outs.map((o, i) => {
+        const n = win(sumRuns(kids[i].in.find((r) => r[0] === nodeId && r[1] === o[0])[2], mask, M));
+        const wdl = [0, 0, 0];
+        for (const [sl, code] of o[2]) if (mask[sl]) { const t = decodeTuple(code); wdl[0] += t[0]; wdl[1] += t[1]; wdl[2] += t[2]; }
+        return { san: o[0], child: o[1], n, share: T ? n / T : NaN, wdl };
+      });
+      const other = T - rows.reduce((a, r) => a + r.n, 0);
+      return { T, rows, other, other_share: T ? other / T : NaN };
     },
   };
   return store;
@@ -207,10 +278,11 @@ export function makeStore(base) {
 
 export function toPlain(res, m0, m1) {
   const f = (x) => (Number.isFinite(x) ? x : null);
+  if (!res.cnt) return { inTree: 0, series: null, attribution: null, window: null };
   const series = {};
   for (const k of SERIES_KEYS) series[k] = Array.from(res.ser[k].slice(m0, m1 + 1), f);
   const win = {};
   for (const k of SERIES_KEYS) win[k] = f(res.win[k]);
   win.c = res.win.c.map(f);
-  return { series, attribution: { c_W: res.att.c_W.map(f), c_B: res.att.c_B.map(f), c_total: res.att.c_total.map(f) }, window: win };
+  return { inTree: res.line.inTree, series, attribution: { c_W: res.att.c_W.map(f), c_B: res.att.c_B.map(f), c_total: res.att.c_total.map(f) }, window: win };
 }

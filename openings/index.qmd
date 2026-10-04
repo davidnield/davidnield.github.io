@@ -2,98 +2,198 @@
 title: "Who plays your opening?"
 subtitle: "Lichess opening popularity, split into White's choices and Black's — and how often you'd meet it compared with your opponent"
 # Self-contained page options, so the page renders the same inside the site
-# (which supplies the theme and declares dash.js + data/** as resources).
+# (which supplies the theme and declares the scripts + data/** as resources).
 format:
   html:
     css: dash.css
     toc: false
     page-layout: full
     anchor-sections: false
+execute:
+  echo: false
 resources:
   - dash.js
+  - board.js
+  - controls.js
   - data/index.json
+  - data/positions.json
   - data/nodes/*.json
 ---
 
 ::: {.dash-lede}
-Pick any of the 3,810 named openings. **True reach** is the share of games that reach its position by any move
-order. Because moves alternate, the share along the named move order factorises exactly into **W**, the product of
-White's choices, times **B**, the product of Black's. The same factors answer a second question: if you always play
-the line, you get it whenever your *opponent* cooperates.
+Play a line on the board, or pick one of the 3,810 named openings below it. **True reach** is the share of games
+that reach the position by any move order. Because moves alternate, the share along *your* move order factorises
+exactly into **W**, the product of White's choices, times **B**, the product of Black's. The same factors answer a
+second question: if you always play the line, you get it whenever your *opponent* cooperates.
 :::
 
 ```{ojs}
-//| echo: false
 //| output: false
 import { makeStore, toPlain, monthDate, monthLabel } from "./dash.js"
+import { createBoard } from "./board.js"
+import { multiSelect, bandSummary } from "./controls.js"
 Plot = import("https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.16/+esm")
+ChessLib = import("https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/esm/chess.js")
 store = makeStore("data")
 ix = store.loadIndex()
-COL = ({ white: "#2a78d6", black: "#eb6834", reach: "#1baf7a", prod: "#52514e", ink: "#0b0b0b", muted: "#898781", grid: "#e1e0d9" })
+COL = ({ white: "#2a78d6", black: "#eb6834", draw: "#b9b8b0", reach: "#1baf7a", prod: "#52514e", ink: "#0b0b0b", muted: "#898781", grid: "#e1e0d9" })
 M = ix.n_months
-openingRows = ix.openings.map((o) => ({ id: o[0], eco: o[1], name: o[2], moves: ix.pgn(o), plies: o[3].length, rank: o[4] }))
-// Shareable state in the URL hash: #opening=<id>&view=attribution&persp=black
+openingRows = ix.openings.map((o) => ({ id: o.id, eco: o.eco, name: o.name, moves: ix.pgn(o.moves), line: o.moves, plies: o.moves.length, rank: o.rank }))
+ITALIAN = ["e4", "e5", "Nf3", "Nc6", "Bc4"]
+// Shareable state in the URL hash:
+//   #moves=e4,e5,Nf3&speeds=Blitz,Rapid&bands=1600,1800&from=2019-01&to=2021-12&smooth=3&view=attribution
+// (#opening=<id> from v1 links still works: it sets the board to that line)
 hashParams = new URLSearchParams(location.hash.slice(1))
-hashId = hashParams.has("opening") ? +hashParams.get("opening") : null
+hashList = (k) => hashParams.has(k) ? hashParams.get(k).split(",").filter(Boolean) : null
 hashMonth = (k, dflt) => {
   const m = /^(\d{4})-(\d{2})$/.exec(hashParams.get(k) ?? "");
-  const [y0, m0] = ix.first_month.split("-").map(Number);
-  const i = m ? (+m[1] - y0) * 12 + (+m[2] - m0) : dflt;
+  const [y0, mm0] = ix.first_month.split("-").map(Number);
+  const i = m ? (+m[1] - y0) * 12 + (+m[2] - mm0) : dflt;
   return Math.max(0, Math.min(M - 1, i));
 }
-defaultRow = openingRows.find((r) => r.id === hashId) ?? openingRows.find((r) => r.moves === "1. e4 e5 2. Nf3 Nc6 3. Bc4")
+initialMoves = hashList("moves") ?? (hashParams.has("opening") ? ix.byId.get(+hashParams.get("opening"))?.moves : null) ?? ITALIAN
 ```
+
+::: {.dash-filters}
+```{ojs}
+viewof speeds = multiSelect({ label: "Speed", options: ix.speeds,
+  value: hashList("speeds")?.filter((s) => ix.speeds.includes(s)) ?? ix.speeds })
+```
+
+```{ojs}
+viewof bands = multiSelect({ label: "Rating", options: ix.bands,
+  value: hashList("bands")?.map(Number).filter((b) => ix.bands.includes(b)) ?? ix.bands,
+  format: (b) => ix.band_labels[ix.bands.indexOf(b)], summary: bandSummary(ix.bands, ix.band_labels) })
+```
+
+```{ojs}
+viewof period = Inputs.form({
+  from: Inputs.select(d3.range(M), { label: "From", value: hashMonth("from", 0), format: (i) => monthLabel(ix, i) }),
+  to: Inputs.select(d3.range(M), { label: "To", value: hashMonth("to", M - 1), format: (i) => monthLabel(ix, i) }),
+})
+```
+
+```{ojs}
+viewof pooled = Inputs.toggle({ label: "3-month pooling", value: hashParams.get("smooth") === "3" })
+```
+:::
+
+::: {.dash-explorer}
+::: {.dash-board-col}
+```{ojs}
+viewof line = createBoard({ Chess: ChessLib.Chess, moves: initialMoves })
+```
+:::
+
+::: {.dash-table-col}
+```{ojs}
+{
+  // Title: the board position's own name (by position, so transpositions are
+  // named); off the tree, the deepest named position before it, "+ k moves".
+  const re = offTree ? await reentry : null;
+  const named = re && re.o ? { o: re.o, at: line.length } : namedAlong;
+  const depth = re && re.o ? line.length : (offTree ? line.length : treeLine.length);
+  let title = named ? `<span class="eco">${esc(named.o.eco)}</span>${esc(named.o.name)}` : "Start position";
+  if (named && named.at < depth) title += ` <span class="dash-after">+ ${depth - named.at} move${depth - named.at > 1 ? "s" : ""}</span>`;
+  let note = "";
+  if (offTree) {
+    const at = `${Math.floor(inTree / 2) + 1}.${inTree % 2 ? ".." : ""} ${esc(line[inTree])}`;
+    note = `<div class="dash-off"><b>Outside the data.</b> ${at} leaves the named-opening tree: the data cover the 7,855
+      positions on the 3,810 named lines and every move between them, nothing else. The panels below follow your line
+      up to ${inTree ? `<span class="dash-moves">${esc(lineText(treeLine))}</span>` : "the start position"}.</div>`;
+    if (re && re.o) note += `<div class="dash-off back"><b>Back in the tree:</b> this position is
+      <b>${esc(re.o.eco)} ${esc(re.o.name)}</b>, but your move order passes through positions outside the tree, so W and B
+      can't be followed along it. <button type="button" class="dash-link" data-opening="${re.o.id}">Show it by its named order</button></div>`;
+  }
+  const d = D(`<div class="dash-chosen">${title}</div><div class="dash-moves">${esc(lineText(line))}</div>${note}`);
+  d.querySelectorAll("button[data-opening]").forEach((b) => b.addEventListener("click", () => viewof line.setLine(ix.byId.get(+b.dataset.opening).moves)));
+  return d;
+}
+```
+
+```{ojs}
+{
+  if (offTree) return D(`<p class="dash-note">No explorer data here: this position is outside the named-opening tree.</p>`);
+  const ex = await store.explorer(res.line.node, speeds, bands, m0, m1);
+  const rowsEx = [...ex.rows].sort((a, b) => b.n - a.n);
+  const fmt = d3.format(",");
+  const wdlBar = (w) => {
+    const t = w[0] + w[1] + w[2];
+    if (!t) return `<span class="dash-wdl empty"></span>`;
+    const seg = (x, cls) => x / t >= 0.12 ? `<span class="${cls}" style="width:${100 * x / t}%">${Math.round(100 * x / t)}%</span>` : `<span class="${cls}" style="width:${100 * x / t}%"></span>`;
+    return `<span class="dash-wdl" title="All-time results for the selected speeds and ratings: White ${pct(w[0] / t)}, draws ${pct(w[1] / t)}, Black ${pct(w[2] / t)}">${seg(w[0], "w")}${seg(w[1], "d")}${seg(w[2], "b")}</span>`;
+  };
+  const body = rowsEx.map((r) => `<tr><td><button type="button" class="dash-mv" data-san="${esc(r.san)}">${esc(r.san)}</button></td>
+      <td class="num">${fmt(r.n)}</td><td class="num">${pct(r.share)}</td><td>${wdlBar(r.wdl)}</td></tr>`).join("")
+    + (ex.T ? `<tr class="other"><td>other moves</td><td class="num">${fmt(ex.other)}</td><td class="num">${pct(ex.other_share)}</td><td></td></tr>` : "");
+  const d = D(`<table class="dash-ex"><thead><tr><th>Move</th><th class="num">Games</th><th class="num">Share</th><th>White · draw · Black</th></tr></thead>
+    <tbody>${body || `<tr><td colspan="4" class="dash-note">No continuations in the data for this selection.</td></tr>`}</tbody></table>
+    <div class="dash-note">${fmt(ex.T)} games continued from this position (${monthLabel(ix, m0)}–${monthLabel(ix, m1)}, selected speeds and ratings).
+    Moves listed are those leading to another position in the named-opening tree; "other moves" is everything else.
+    Result bars are all-time for the selected speeds and ratings.</div>`);
+  d.querySelectorAll("button[data-san]").forEach((b) => b.addEventListener("click", () => viewof line.setLine([...line, b.dataset.san])));
+  return d;
+}
+```
+:::
+:::
 
 ::: {.dash-picker}
 ```{ojs}
-//| echo: false
+html`<h3 class="dash-h3">Or pick a named opening</h3>`
+```
+
+```{ojs}
 viewof q = Inputs.search(openingRows, { placeholder: "Search ECO, name or moves (e.g. B90, Berlin, d4 d5 Bf4)…", columns: ["eco", "name", "moves"], width: 520 })
+```
+
+```{ojs}
 viewof pick = Inputs.table(q, {
   columns: ["eco", "name", "moves", "rank"],
   header: { eco: "ECO", name: "Opening", moves: "Moves", rank: "Reach rank" },
   width: { eco: 50, rank: 90 },
-  sort: "rank", multiple: false, value: q.includes(chosen) ? chosen : null, rows: 6, layout: "auto",
+  sort: "rank", multiple: false, value: null, rows: 6, layout: "auto",
 })
 ```
 :::
 
 ```{ojs}
-//| echo: false
 //| output: false
-mutable chosen = defaultRow
-{ if (pick && pick !== mutable chosen) { mutable chosen = pick; hashParams.set("opening", pick.id); history.replaceState(null, "", `#${hashParams}`); } }
+// picking a named opening sets the board to its line
+{ if (pick) viewof line.setLine(pick.line); }
 ```
 
 ```{ojs}
-//| echo: false
-html`<div class="dash-chosen"><span class="eco">${chosen.eco}</span>${chosen.name}</div>
-<div class="dash-moves">${chosen.moves}</div>
-${chosen.plies > 30 ? html`<p class="dash-note">This line is ${chosen.plies} plies long; the data stop at ply 30, so its path cannot be followed to the end and its series are blank.</p>` : ""}`
-```
-
-::: {.dash-controls}
-```{ojs}
-//| echo: false
-viewof ctl = Inputs.form({
-  perspective: Inputs.radio(["White", "Black", "Neutral"], { label: "Perspective",
-    value: ({ black: "Black", neutral: "Neutral" })[hashParams.get("persp")] ?? "White" }),
-  speeds: Inputs.checkbox(ix.speeds, { label: "Speed", value: ix.speeds }),
-  bands: Inputs.checkbox(ix.bands, { label: "Rating (average)", value: ix.bands, format: (b) => ix.band_labels[ix.bands.indexOf(b)] }),
-  from: Inputs.select(d3.range(M), { label: "From", value: hashMonth("from", 0), format: (i) => monthLabel(ix, i) }),
-  to: Inputs.select(d3.range(M), { label: "To", value: hashMonth("to", M - 1), format: (i) => monthLabel(ix, i) }),
-  smooth: Inputs.toggle({ label: "3-month pooling", value: false }),
-})
-```
-:::
-
-```{ojs}
-//| echo: false
 //| output: false
-m0 = Math.min(ctl.from, ctl.to)
-m1 = Math.max(ctl.from, ctl.to)
-smooth = ctl.smooth ? 3 : 1
-res = store.compute(chosen.id, ctl.speeds, ctl.bands, m0, m1, smooth)
-rows = d3.range(m0, m1 + 1).map((m, j) => {
+m0 = Math.min(period.from, period.to)
+m1 = Math.max(period.from, period.to)
+smooth = pooled ? 3 : 1
+res = store.compute(line, speeds, bands, m0, m1, smooth)
+inTree = res.line.inTree
+treeLine = line.slice(0, inTree)
+offTree = inTree < line.length
+// the named opening at a node: prefer the one whose moves are exactly this
+// line; else the shortest named line ending there (all share the position)
+nameAt = (node, moves) => {
+  const c = ix.namesAt.get(node);
+  if (!c) return null;
+  const key = moves.join(" ");
+  return c.find((o) => o.moves.join(" ") === key) ?? [...c].sort((a, b) => a.moves.length - b.moves.length || a.rank - b.rank)[0];
+}
+// deepest named position along the in-tree part of the line
+namedAlong = {
+  let v = ix.root, best = null;
+  const nodes = [ix.root, ...res.line.edges.map((e) => e.child)];
+  for (let i = nodes.length - 1; i >= 0 && !best; i--) {
+    const o = nameAt(nodes[i], treeLine.slice(0, i));
+    if (o) best = { o, at: i };
+  }
+  return best;
+}
+// a line that left the tree may have come back into it (a transposition
+// through positions outside S): recognise the position by its FEN
+reentry = offTree ? store.nodeOfFen(viewof line.fen()).then((v) => (v === null ? null : { node: v, o: nameAt(v, []) })) : null
+rows = res.cnt ? d3.range(m0, m1 + 1).map((m, j) => {
   const s = res.ser, a = res.att;
   const r = { m, date: monthDate(ix, m), label: monthLabel(ix, m) };
   for (const k of ["W", "B", "WxB", "reach", "gap", "E_white", "E_black", "edge_white", "edge_black",
@@ -101,18 +201,18 @@ rows = d3.range(m0, m1 + 1).map((m, j) => {
     r[k] = Number.isFinite(s[k][m]) ? s[k][m] : NaN;
   r.c_W = a.c_W[j]; r.c_B = a.c_B[j]; r.c_total = a.c_total[j];
   return r;
-})
-win = res.win
+}) : []
+win = res.cnt ? res.win : ({ c: [], T: [], n: [] })
 popNote = {
-  const sp = ctl.speeds.length === ix.speeds.length ? "all speeds" : (ctl.speeds.join(" + ") || "no speeds");
-  const bl = ctl.bands.length === ix.bands.length ? "all ratings" : (ctl.bands.map((b) => ix.band_labels[ix.bands.indexOf(b)]).join(", ") || "no ratings");
+  const sp = speeds.length === ix.speeds.length ? "all speeds" : (speeds.join(" + ") || "no speeds");
+  const bl = bands.length === ix.bands.length ? "all ratings" : (bands.map((b) => ix.band_labels[ix.bands.indexOf(b)]).join(", ") || "no ratings");
   return `Lichess rated standard games (no arena/swiss, no bots), ${monthLabel(ix, m0)}–${monthLabel(ix, m1)}, ${sp}, ${bl}. `
     + (smooth === 3 ? "Monthly, counts pooled over 3 months. " : "Monthly. ")
-    + "Gaps: a path position had < 30 games, or a move was never played.";
+    + "Gaps: a position on the line had < 30 games, or a move was never played.";
 }
 pct = (x, d = 1) => !Number.isFinite(x) ? "—" : x >= 0.1 ? `${(100 * x).toFixed(d)}%` : x >= 0.001 ? `${(100 * x).toFixed(d + 1)}%` : `${(100 * x).toPrecision(2)}%`
 tickPct = (d) => d3.format("~%")(+d.toPrecision(6))
-// Log-axis ticks at 1/2/5, 1/3 or 1 x 10^k depending on the span, so a wide
+// Log-axis ticks at 1/2/3/5, 1/3 or 1 x 10^k depending on the span, so a wide
 // range never draws a thicket of unlabeled minor ticks.
 logTicks = (vals) => {
   const v = vals.filter((x) => Number.isFinite(x) && x > 0);
@@ -122,28 +222,55 @@ logTicks = (vals) => {
   const mult = span > 2.5 ? [1] : span > 1.2 ? [1, 3] : [1, 2, 3, 5];
   const out = [];
   for (let e = Math.floor(Math.log10(lo)) - 1; e <= Math.ceil(Math.log10(hi)); e++)
-    for (const m of mult) { const t = +(m * 10 ** e).toPrecision(6); if (t >= lo / 1.15 && t <= hi * 1.15) out.push(t); }
+    for (const mlt of mult) { const t = +(mlt * 10 ** e).toPrecision(6); if (t >= lo / 1.15 && t <= hi * 1.15) out.push(t); }
   return out.length >= 2 ? out : undefined;
 }
 oneIn = (p) => !Number.isFinite(p) || p <= 0 ? "—" : p >= 0.5 ? `1 in ${(1 / p).toFixed(1)}` : `1 in ${d3.format(",")(Math.round(1 / p))}`
 times = (x) => !Number.isFinite(x) ? "—" : x >= 10 ? `${d3.format(",")(Math.round(x))}×` : `${x.toFixed(1)}×`
 key = (color, kind = "solid") => `<span class="dash-key ${kind}" style="border-color:${color};${kind === "box" ? `background:${color}` : ""}"></span>`
+esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c])
 D = (s) => { const d = document.createElement("div"); d.innerHTML = s; return d; }
 font = ({ fontFamily: "'Atkinson Hyperlegible', sans-serif", fontSize: "12px", background: "transparent", overflow: "visible" })
-// gate-4 hook: the page's own numbers, read back through the browser pane
-{ window.dashCompute = async (id, speeds, bands, a, b, sm) => toPlain(await store.compute(id, speeds, bands, a, b, sm), a, b); window.dashIndex = ix; return true; }
+lineText = (moves) => moves.length ? ix.pgn(moves) : "the start position"
+// keep the URL in step with the state, so any view can be shared
+{
+  const p = new URLSearchParams();
+  p.set("moves", line.join(","));
+  if (speeds.length !== ix.speeds.length) p.set("speeds", speeds.join(","));
+  if (bands.length !== ix.bands.length) p.set("bands", bands.join(","));
+  if (m0 !== 0) p.set("from", monthLabel(ix, m0));
+  if (m1 !== M - 1) p.set("to", monthLabel(ix, m1));
+  if (smooth === 3) p.set("smooth", "3");
+  if (view2 === "Attribution") p.set("view", "attribution");
+  history.replaceState(null, "", "#" + p.toString().replace(/%2C/g, ","));
+}
+// gate-4 hook: the page's own numbers for any line, read back through the browser pane
+{
+  window.dashCompute = async (moves, sp, bd, a, b, sm) => {
+    const r = await store.compute(moves, sp, bd, a, b, sm);
+    const out = toPlain(r, a, b);
+    out.explorer = await store.explorer(r.line.node, sp, bd, a, b);
+    return out;
+  };
+  window.dashIndex = ix;
+  return true;
+}
+```
+
+
+
+```{ojs}
+res.cnt ? html`` : D(`<p class="dash-callout">Make a move on the board (or pick a named opening) to see its popularity, who drives it, and how often each side meets it.</p>`)
 ```
 
 ::: {.dash-panel}
 ## 1 · How popular is it?
 
 ```{ojs}
-//| echo: false
 viewof scale1 = Inputs.radio(["log", "linear"], { label: "Scale", value: "log" })
 ```
 
 ```{ojs}
-//| echo: false
 D(`<div class="dash-legend">
   <span>${key(COL.reach)} True reach: any move order</span>
   <span>${key(COL.prod, "dashed")} W×B: this move order only</span>
@@ -151,10 +278,9 @@ D(`<div class="dash-legend">
 ```
 
 ```{ojs}
-//| echo: false
 Plot.plot({
   width: Math.min(width, 1100), height: 300, marginLeft: 68, marginTop: 30, style: font,
-  x: { type: "utc", label: null },
+  x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)] },
   y: { type: scale1, label: "share of games", tickFormat: tickPct, grid: true, ...(scale1 === "log" ? { ticks: logTicks(rows.flatMap((d) => [d.reach_lo, d.reach_hi, d.WxB])) } : { nice: true }) },
   marks: [
     Plot.areaY(rows, { x: "date", y1: "reach_lo", y2: "reach_hi", fill: COL.reach, fillOpacity: 0.18, curve: "monotone-x" }),
@@ -168,9 +294,8 @@ Plot.plot({
 ```
 
 ```{ojs}
-//| echo: false
 html`<div class="dash-note">${popNote}</div>
-<p class="dash-copy"><b>The gap is information, not error.</b> Over this window, the named move order carries
+<p class="dash-copy"><b>The gap is information, not error.</b> Over this window, your move order carries
 <b>${pct(win.gap, 0)}</b> of the games that reach the position (W×B ${pct(win.WxB)} vs true reach ${pct(win.reach)});
 other move orders bring the rest.</p>`
 ```
@@ -180,14 +305,12 @@ other move orders bring the rest.</p>`
 ## 2 · Who moved it, White or Black?
 
 ```{ojs}
-//| echo: false
 viewof view2 = Inputs.radio(["Levels", "Attribution"], { label: "View", value: hashParams.get("view") === "attribution" ? "Attribution" : "Levels" })
 ```
 
 ```{ojs}
-//| echo: false
-view2 === "Levels" ? D(`<p class="dash-sub"><b>W</b> = how often White makes White's moves on the path when offered the
-chance (1.e4 included); <b>B</b> = the same for Black. W × B is the dashed line in panel 1.</p>
+view2 === "Levels" ? D(`<p class="dash-sub"><b>W</b> = how often White makes White's moves on the line when offered the
+chance (1st move included); <b>B</b> = the same for Black. W × B is the dashed line in panel 1.</p>
 <div class="dash-legend"><span>${key(COL.white)} W: White steers here</span><span>${key(COL.black)} B: Black allows it</span>
 <span>shaded: 95% interval</span></div>`)
 : D(`<p class="dash-sub">Change since the start of the window (first 12 months, geometric mean). On a log scale the two
@@ -197,12 +320,11 @@ contributions add up exactly to the net change, with no interaction left over.</
 ```
 
 ```{ojs}
-//| echo: false
 {
   if (view2 === "Levels") {
     return Plot.plot({
       width: Math.min(width, 1100), height: 300, marginLeft: 68, marginTop: 30, style: font,
-      x: { type: "utc", label: null },
+      x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)] },
       y: { type: scale1, label: "probability", tickFormat: tickPct, grid: true, ...(scale1 === "log" ? { ticks: logTicks(rows.flatMap((d) => [d.W_lo, d.W_hi, d.B_lo, d.B_hi])) } : { nice: true }) },
       marks: [
         Plot.areaY(rows, { x: "date", y1: "W_lo", y2: "W_hi", fill: COL.white, fillOpacity: 0.15, curve: "monotone-x" }),
@@ -227,7 +349,7 @@ contributions add up exactly to the net change, with no interaction left over.</
   const fmt = (t) => { const p = Math.exp(t) - 1; return Math.abs(p) < 1e-9 ? "0%" : `${p > 0 ? "+" : ""}${Math.round(100 * p)}%`; };
   return Plot.plot({
     width: Math.min(width, 1100), height: 300, marginLeft: 68, marginTop: 30, style: font,
-    x: { type: "utc", label: null },
+    x: { type: "utc", label: null, domain: [monthDate(ix, m0), d3.utcMonth.offset(monthDate(ix, m1), 1)] },
     y: { label: "change vs window start (log scale)", ticks, tickFormat: fmt, grid: true },
     color: { domain: ["W", "B"], range: [COL.white, COL.black] },
     marks: [
@@ -243,7 +365,6 @@ contributions add up exactly to the net change, with no interaction left over.</
 ```
 
 ```{ojs}
-//| echo: false
 {
   const fmt = (t) => !Number.isFinite(t) ? "—" : `${t >= 0 ? "+" : ""}${Math.round(100 * (Math.exp(t) - 1))}%`;
   const last = rows.filter((d) => Number.isFinite(d.c_total)).slice(-12);
@@ -259,13 +380,19 @@ contributions add up exactly to the net change, with no interaction left over.</
 ## 3 · How often would you see it, and how often would your opponent?
 
 ```{ojs}
-//| echo: false
+// Local to this panel. Default: the side that plays the line's last move,
+// i.e. the side "choosing" the opening.
+viewof persp = Inputs.select(["White", "Black", "Both sides"], { label: "Perspective",
+  value: inTree === 0 ? "Both sides" : inTree % 2 ? "White" : "Black" })
+```
+
+```{ojs}
 {
-  const P = ctl.perspective;
+  const P = persp;
   const tile = (k, v, s, color) => `<div class="dash-tile"><div class="k">${color ? key(color) : ""}${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
   const typical = tile("Typical opponent meets it", oneIn(win.WxB), `along this move order; ${oneIn(win.reach)} by any order`, COL.prod);
   let tiles;
-  if (P === "Neutral") {
+  if (P === "Both sides") {
     tiles = [
       tile("A White specialist gets it", oneIn(win.E_white), `E<sub>White</sub> = B: Black's moves decide · edge ${times(win.edge_white)}`, COL.white),
       tile("A Black specialist gets it", oneIn(win.E_black), `E<sub>Black</sub> = W: White's moves decide · edge ${times(win.edge_black)}`, COL.black),
@@ -285,10 +412,9 @@ contributions add up exactly to the net change, with no interaction left over.</
 ```
 
 ```{ojs}
-//| echo: false
 {
-  const P = ctl.perspective;
-  const series = P === "Neutral"
+  const P = persp;
+  const series = P === "Both sides"
     ? [{ k: "E_white", name: "White specialist", color: COL.white }, { k: "E_black", name: "Black specialist", color: COL.black }]
     : [{ k: P === "White" ? "E_white" : "E_black", name: `You (${P})`, color: P === "White" ? COL.white : COL.black }];
   const legend = series.map((s) => `<span>${key(s.color)} ${s.name}</span>`).join("")
@@ -296,7 +422,7 @@ contributions add up exactly to the net change, with no interaction left over.</
   const inv = (x) => Number.isFinite(x) && x > 0 ? 1 / x : NaN;
   const chart = Plot.plot({
     width: Math.min(width, 1100), height: 280, marginLeft: 76, marginTop: 30, style: font,
-    x: { type: "utc", label: null },
+    x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)] },
     y: { type: "log", label: "once every … games", grid: true, tickFormat: (d) => `1 in ${d3.format("~s")(d)}`,
          ticks: logTicks(rows.flatMap((d) => [...series.map((s) => inv(d[s.k])), inv(d.WxB), inv(d.reach)])) },
     marks: [
@@ -324,8 +450,8 @@ for the defender.
 ## 4 · The move path
 
 ```{ojs}
-//| echo: false
 {
+  if (!res.cnt) return D(`<p class="dash-note">No moves yet.</p>`);
   const c = win.c, T = win.T, n = win.n;
   const fin = c.filter(Number.isFinite);
   const minC = fin.length ? Math.min(...fin) : NaN;
@@ -333,7 +459,7 @@ for the defender.
     const side = i % 2 === 0 ? "White" : "Black";
     const col = i % 2 === 0 ? COL.white : COL.black;
     const thin = T[i] < 30 || n[i] < 1;
-    const label = `${Math.floor(i / 2) + 1}.${i % 2 === 0 ? "" : ".."} ${e[2]}`;
+    const label = `${Math.floor(i / 2) + 1}.${i % 2 === 0 ? "" : ".."} ${esc(e.san)}`;
     const bar = Number.isFinite(c[i]) ? `<span class="dash-bar" style="width:${Math.max(1, 160 * c[i])}px;background:${col}"></span>` : "";
     return `<tr class="${c[i] === minC ? "rare" : ""}"><td>${i + 1}</td><td>${key(col)} ${side}</td><td class="dash-moves">${label}</td>
       <td class="num">${thin ? `<span class="dash-gap">${pct(c[i])}</span>` : pct(c[i])}</td><td>${bar}</td>
@@ -353,7 +479,6 @@ for the defender.
 <details><summary>Monthly numbers (table view)</summary>
 
 ```{ojs}
-//| echo: false
 Inputs.table(rows.map((d) => ({ month: d.label, W: d.W, B: d.B, "W×B": d.WxB, reach: d.reach, gap: d.gap,
   "edge (White)": d.edge_white, "edge (Black)": d.edge_black })), {
   format: { W: (x) => pct(x), B: (x) => pct(x), "W×B": (x) => pct(x), reach: (x) => pct(x), gap: (x) => pct(x, 0),
@@ -365,4 +490,6 @@ Inputs.table(rows.map((d) => ({ month: d.label, W: d.W, B: d.B, "W×B": d.WxB, r
 Data: the Lichess open database, rated standard games 2013-01 to 2026-07, through a per-month opening-tree extract
 (counts summed over ply, the Lichess-explorer convention). Bots, arena/swiss games and abandoned or cheat-terminated
 games are excluded. Rating bands are by the two players' average rating. Opening names: lichess-org/chess-openings.
+The data cover the positions on the named lines and every move between two of them. Board: chess.js (BSD-2-Clause);
+pieces are Unicode chess symbols.
 :::

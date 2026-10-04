@@ -14,7 +14,25 @@
 }
 
 body { background: var(--surface); color: var(--ink); }
-main.content { max-width: 1180px; margin: 0 auto; }
+/* width + min-width: auto margins on a Quarto page-grid item would otherwise
+   size main to its content (the search table's ~620px min-content), so phones
+   laid the page out at ~640px and zoomed out. Wide tables scroll instead.
+   (Adopted from the site session's fix, davidnield.github.io 6060b0d.) */
+main.content { max-width: 1180px; margin: 0 auto; width: 100%; min-width: 0; }
+main.content form:has(> table) { max-width: 100%; overflow-x: auto; }
+@media (max-width: 767.98px) {
+  table.dash-path { display: block; overflow-x: auto; }
+}
+
+/* search box: on narrow screens the input takes the full width and the
+   "N results" count wraps onto its own line */
+.dash-picker form:not(:has(> table)) { max-width: 100%; }
+@media (max-width: 767.98px) {
+  .dash-picker form:not(:has(> table)),
+  .dash-picker form:not(:has(> table)) > div { display: flex; flex-wrap: wrap; width: 100% !important; }
+  .dash-picker form:not(:has(> table)) input[type="search"] { width: 100% !important; max-width: 100%; flex: 1 1 100%; }
+  .dash-picker form:not(:has(> table)) output { flex: 1 1 100%; margin: 0.15rem 0 0; }
+}
 
 .dash-lede { color: var(--ink-2); max-width: 70ch; }
 

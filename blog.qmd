@@ -9,3 +9,7 @@ listing:
 page-layout: full
 title-block-banner: false
 ---
+
+::: {.blog-empty}
+No posts yet.
+:::

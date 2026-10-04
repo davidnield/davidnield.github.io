@@ -1,1 +1,5 @@
 /* css styles */
+/* Blog: the "No posts yet" note shows only while the listing is empty. */
+main:has(.quarto-post) .blog-empty {
+  display: none;
+}

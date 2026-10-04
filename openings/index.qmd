@@ -1,17 +1,368 @@
 ---
-title: "Chess openings"
-description: "How popular each chess opening is on Lichess, who chooses it, and how often you'd meet it compared with your opponent."
+title: "Who plays your opening?"
+subtitle: "Lichess opening popularity, split into White's choices and Black's — and how often you'd meet it compared with your opponent"
+# Self-contained page options, so the page renders the same inside the site
+# (which supplies the theme and declares dash.js + data/** as resources).
+format:
+  html:
+    css: dash.css
+    toc: false
+    page-layout: full
+    anchor-sections: false
+resources:
+  - dash.js
+  - data/index.json
+  - data/nodes/*.json
 ---
 
-An interactive opening dashboard is coming soon.
+::: {.dash-lede}
+Pick any of the 3,810 named openings. **True reach** is the share of games that reach its position by any move
+order. Because moves alternate, the share along the named move order factorises exactly into **W**, the product of
+White's choices, times **B**, the product of Black's. The same factors answer a second question: if you always play
+the line, you get it whenever your *opponent* cooperates.
+:::
 
-For any of the roughly 3,800 named openings, it will show:
+```{ojs}
+//| echo: false
+//| output: false
+import { makeStore, toPlain, monthDate, monthLabel } from "./dash.js"
+Plot = import("https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.16/+esm")
+store = makeStore("data")
+ix = store.loadIndex()
+COL = ({ white: "#2a78d6", black: "#eb6834", reach: "#1baf7a", prod: "#52514e", ink: "#0b0b0b", muted: "#898781", grid: "#e1e0d9" })
+M = ix.n_months
+openingRows = ix.openings.map((o) => ({ id: o[0], eco: o[1], name: o[2], moves: ix.pgn(o), plies: o[3].length, rank: o[4] }))
+// Shareable state in the URL hash: #opening=<id>&view=attribution&persp=black
+hashParams = new URLSearchParams(location.hash.slice(1))
+hashId = hashParams.has("opening") ? +hashParams.get("opening") : null
+hashMonth = (k, dflt) => {
+  const m = /^(\d{4})-(\d{2})$/.exec(hashParams.get(k) ?? "");
+  const [y0, m0] = ix.first_month.split("-").map(Number);
+  const i = m ? (+m[1] - y0) * 12 + (+m[2] - m0) : dflt;
+  return Math.max(0, Math.min(M - 1, i));
+}
+defaultRow = openingRows.find((r) => r.id === hashId) ?? openingRows.find((r) => r.moves === "1. e4 e5 2. Nf3 Nc6 3. Bc4")
+```
 
-- how often games reach the opening, over time;
-- whether White or Black is the one choosing it;
-- how often *you* would see it compared with your opponent.
+::: {.dash-picker}
+```{ojs}
+//| echo: false
+viewof q = Inputs.search(openingRows, { placeholder: "Search ECO, name or moves (e.g. B90, Berlin, d4 d5 Bf4)…", columns: ["eco", "name", "moves"], width: 520 })
+viewof pick = Inputs.table(q, {
+  columns: ["eco", "name", "moves", "rank"],
+  header: { eco: "ECO", name: "Opening", moves: "Moves", rank: "Reach rank" },
+  width: { eco: 50, rank: 90 },
+  sort: "rank", multiple: false, value: q.includes(chosen) ? chosen : null, rows: 6, layout: "auto",
+})
+```
+:::
 
-<!--
-This page is a placeholder slot. tools/sync_openings.ps1 copies the built page and data from the
-Chess Opening Dashboard repo (dashboard/) into this folder, replacing this file.
--->
+```{ojs}
+//| echo: false
+//| output: false
+mutable chosen = defaultRow
+{ if (pick && pick !== mutable chosen) { mutable chosen = pick; hashParams.set("opening", pick.id); history.replaceState(null, "", `#${hashParams}`); } }
+```
+
+```{ojs}
+//| echo: false
+html`<div class="dash-chosen"><span class="eco">${chosen.eco}</span>${chosen.name}</div>
+<div class="dash-moves">${chosen.moves}</div>
+${chosen.plies > 30 ? html`<p class="dash-note">This line is ${chosen.plies} plies long; the data stop at ply 30, so its path cannot be followed to the end and its series are blank.</p>` : ""}`
+```
+
+::: {.dash-controls}
+```{ojs}
+//| echo: false
+viewof ctl = Inputs.form({
+  perspective: Inputs.radio(["White", "Black", "Neutral"], { label: "Perspective",
+    value: ({ black: "Black", neutral: "Neutral" })[hashParams.get("persp")] ?? "White" }),
+  speeds: Inputs.checkbox(ix.speeds, { label: "Speed", value: ix.speeds }),
+  bands: Inputs.checkbox(ix.bands, { label: "Rating (average)", value: ix.bands, format: (b) => ix.band_labels[ix.bands.indexOf(b)] }),
+  from: Inputs.select(d3.range(M), { label: "From", value: hashMonth("from", 0), format: (i) => monthLabel(ix, i) }),
+  to: Inputs.select(d3.range(M), { label: "To", value: hashMonth("to", M - 1), format: (i) => monthLabel(ix, i) }),
+  smooth: Inputs.toggle({ label: "3-month pooling", value: false }),
+})
+```
+:::
+
+```{ojs}
+//| echo: false
+//| output: false
+m0 = Math.min(ctl.from, ctl.to)
+m1 = Math.max(ctl.from, ctl.to)
+smooth = ctl.smooth ? 3 : 1
+res = store.compute(chosen.id, ctl.speeds, ctl.bands, m0, m1, smooth)
+rows = d3.range(m0, m1 + 1).map((m, j) => {
+  const s = res.ser, a = res.att;
+  const r = { m, date: monthDate(ix, m), label: monthLabel(ix, m) };
+  for (const k of ["W", "B", "WxB", "reach", "gap", "E_white", "E_black", "edge_white", "edge_black",
+                   "edge_white_reach", "edge_black_reach", "W_lo", "W_hi", "B_lo", "B_hi", "reach_lo", "reach_hi"])
+    r[k] = Number.isFinite(s[k][m]) ? s[k][m] : NaN;
+  r.c_W = a.c_W[j]; r.c_B = a.c_B[j]; r.c_total = a.c_total[j];
+  return r;
+})
+win = res.win
+popNote = {
+  const sp = ctl.speeds.length === ix.speeds.length ? "all speeds" : (ctl.speeds.join(" + ") || "no speeds");
+  const bl = ctl.bands.length === ix.bands.length ? "all ratings" : (ctl.bands.map((b) => ix.band_labels[ix.bands.indexOf(b)]).join(", ") || "no ratings");
+  return `Lichess rated standard games (no arena/swiss, no bots), ${monthLabel(ix, m0)}–${monthLabel(ix, m1)}, ${sp}, ${bl}. `
+    + (smooth === 3 ? "Monthly, counts pooled over 3 months. " : "Monthly. ")
+    + "Gaps: a path position had < 30 games, or a move was never played.";
+}
+pct = (x, d = 1) => !Number.isFinite(x) ? "—" : x >= 0.1 ? `${(100 * x).toFixed(d)}%` : x >= 0.001 ? `${(100 * x).toFixed(d + 1)}%` : `${(100 * x).toPrecision(2)}%`
+tickPct = (d) => d3.format("~%")(+d.toPrecision(6))
+// Log-axis ticks at 1/2/5, 1/3 or 1 x 10^k depending on the span, so a wide
+// range never draws a thicket of unlabeled minor ticks.
+logTicks = (vals) => {
+  const v = vals.filter((x) => Number.isFinite(x) && x > 0);
+  if (!v.length) return undefined;
+  const lo = d3.min(v), hi = d3.max(v), span = Math.log10(hi / lo);
+  if (span < 0.6) return d3.ticks(lo, hi, 5).filter((t) => t > 0);   // narrow range: plain nice ticks
+  const mult = span > 2.5 ? [1] : span > 1.2 ? [1, 3] : [1, 2, 3, 5];
+  const out = [];
+  for (let e = Math.floor(Math.log10(lo)) - 1; e <= Math.ceil(Math.log10(hi)); e++)
+    for (const m of mult) { const t = +(m * 10 ** e).toPrecision(6); if (t >= lo / 1.15 && t <= hi * 1.15) out.push(t); }
+  return out.length >= 2 ? out : undefined;
+}
+oneIn = (p) => !Number.isFinite(p) || p <= 0 ? "—" : p >= 0.5 ? `1 in ${(1 / p).toFixed(1)}` : `1 in ${d3.format(",")(Math.round(1 / p))}`
+times = (x) => !Number.isFinite(x) ? "—" : x >= 10 ? `${d3.format(",")(Math.round(x))}×` : `${x.toFixed(1)}×`
+key = (color, kind = "solid") => `<span class="dash-key ${kind}" style="border-color:${color};${kind === "box" ? `background:${color}` : ""}"></span>`
+D = (s) => { const d = document.createElement("div"); d.innerHTML = s; return d; }
+font = ({ fontFamily: "'Atkinson Hyperlegible', sans-serif", fontSize: "12px", background: "transparent", overflow: "visible" })
+// gate-4 hook: the page's own numbers, read back through the browser pane
+{ window.dashCompute = async (id, speeds, bands, a, b, sm) => toPlain(await store.compute(id, speeds, bands, a, b, sm), a, b); window.dashIndex = ix; return true; }
+```
+
+::: {.dash-panel}
+## 1 · How popular is it?
+
+```{ojs}
+//| echo: false
+viewof scale1 = Inputs.radio(["log", "linear"], { label: "Scale", value: "log" })
+```
+
+```{ojs}
+//| echo: false
+D(`<div class="dash-legend">
+  <span>${key(COL.reach)} True reach: any move order</span>
+  <span>${key(COL.prod, "dashed")} W×B: this move order only</span>
+  <span>${key(COL.reach, "box").replace("background:", "opacity:.25;background:")} 95% interval</span></div>`)
+```
+
+```{ojs}
+//| echo: false
+Plot.plot({
+  width: Math.min(width, 1100), height: 300, marginLeft: 68, marginTop: 30, style: font,
+  x: { type: "utc", label: null },
+  y: { type: scale1, label: "share of games", tickFormat: tickPct, grid: true, ...(scale1 === "log" ? { ticks: logTicks(rows.flatMap((d) => [d.reach_lo, d.reach_hi, d.WxB])) } : { nice: true }) },
+  marks: [
+    Plot.areaY(rows, { x: "date", y1: "reach_lo", y2: "reach_hi", fill: COL.reach, fillOpacity: 0.18, curve: "monotone-x" }),
+    Plot.lineY(rows, { x: "date", y: "reach", stroke: COL.reach, strokeWidth: 2, curve: "monotone-x" }),
+    Plot.lineY(rows, { x: "date", y: "WxB", stroke: COL.prod, strokeWidth: 2, strokeDasharray: "5,4", curve: "monotone-x" }),
+    Plot.ruleX(rows, Plot.pointerX({ x: "date", stroke: COL.muted, strokeWidth: 1 })),
+    Plot.tip(rows, Plot.pointerX({ x: "date", y: "reach",
+      title: (d) => `${d.label}\nTrue reach  ${pct(d.reach)}  (${pct(d.reach_lo)}–${pct(d.reach_hi)})\nW×B         ${pct(d.WxB)}\nThis order carries ${pct(d.gap, 0)}` })),
+  ],
+})
+```
+
+```{ojs}
+//| echo: false
+html`<div class="dash-note">${popNote}</div>
+<p class="dash-copy"><b>The gap is information, not error.</b> Over this window, the named move order carries
+<b>${pct(win.gap, 0)}</b> of the games that reach the position (W×B ${pct(win.WxB)} vs true reach ${pct(win.reach)});
+other move orders bring the rest.</p>`
+```
+:::
+
+::: {.dash-panel}
+## 2 · Who moved it, White or Black?
+
+```{ojs}
+//| echo: false
+viewof view2 = Inputs.radio(["Levels", "Attribution"], { label: "View", value: hashParams.get("view") === "attribution" ? "Attribution" : "Levels" })
+```
+
+```{ojs}
+//| echo: false
+view2 === "Levels" ? D(`<p class="dash-sub"><b>W</b> = how often White makes White's moves on the path when offered the
+chance (1.e4 included); <b>B</b> = the same for Black. W × B is the dashed line in panel 1.</p>
+<div class="dash-legend"><span>${key(COL.white)} W: White steers here</span><span>${key(COL.black)} B: Black allows it</span>
+<span>shaded: 95% interval</span></div>`)
+: D(`<p class="dash-sub">Change since the start of the window (first 12 months, geometric mean). On a log scale the two
+contributions add up exactly to the net change, with no interaction left over.</p>
+<div class="dash-legend"><span>${key(COL.white, "box")} White's contribution</span><span>${key(COL.black, "box")} Black's contribution</span>
+<span>${key(COL.ink)} Net change in W×B</span></div>`)
+```
+
+```{ojs}
+//| echo: false
+{
+  if (view2 === "Levels") {
+    return Plot.plot({
+      width: Math.min(width, 1100), height: 300, marginLeft: 68, marginTop: 30, style: font,
+      x: { type: "utc", label: null },
+      y: { type: scale1, label: "probability", tickFormat: tickPct, grid: true, ...(scale1 === "log" ? { ticks: logTicks(rows.flatMap((d) => [d.W_lo, d.W_hi, d.B_lo, d.B_hi])) } : { nice: true }) },
+      marks: [
+        Plot.areaY(rows, { x: "date", y1: "W_lo", y2: "W_hi", fill: COL.white, fillOpacity: 0.15, curve: "monotone-x" }),
+        Plot.areaY(rows, { x: "date", y1: "B_lo", y2: "B_hi", fill: COL.black, fillOpacity: 0.15, curve: "monotone-x" }),
+        Plot.lineY(rows, { x: "date", y: "W", stroke: COL.white, strokeWidth: 2, curve: "monotone-x" }),
+        Plot.lineY(rows, { x: "date", y: "B", stroke: COL.black, strokeWidth: 2, curve: "monotone-x" }),
+        Plot.ruleX(rows, Plot.pointerX({ x: "date", stroke: COL.muted, strokeWidth: 1 })),
+        Plot.tip(rows, Plot.pointerX({ x: "date", y: "W",
+          title: (d) => `${d.label}\nW (White)  ${pct(d.W)}  (${pct(d.W_lo)}–${pct(d.W_hi)})\nB (Black)  ${pct(d.B)}  (${pct(d.B_lo)}–${pct(d.B_hi)})` })),
+      ],
+    });
+  }
+  const long = rows.flatMap((d) => [
+    { date: d.date, side: "W", v: d.c_W, label: d.label },   // not "White"/"Black": Plot would
+    { date: d.date, side: "B", v: d.c_B, label: d.label },   // read those as CSS colours
+  ]).filter((d) => Number.isFinite(d.v));
+  const ext = d3.extent([...long.map((d) => d.v), ...rows.map((d) => d.c_total).filter(Number.isFinite),
+    ...rows.map((d) => Math.max(0, d.c_W) + Math.max(0, d.c_B)).filter(Number.isFinite),
+    ...rows.map((d) => Math.min(0, d.c_W) + Math.min(0, d.c_B)).filter(Number.isFinite), 0]);
+  const cands = [-0.9, -0.75, -0.5, -0.33, -0.2, -0.1, 0, 0.1, 0.25, 0.5, 1, 2, 4, 9];
+  const ticks = cands.map((p) => Math.log(1 + p)).filter((t) => t >= ext[0] - 0.05 && t <= ext[1] + 0.05);
+  const fmt = (t) => { const p = Math.exp(t) - 1; return Math.abs(p) < 1e-9 ? "0%" : `${p > 0 ? "+" : ""}${Math.round(100 * p)}%`; };
+  return Plot.plot({
+    width: Math.min(width, 1100), height: 300, marginLeft: 68, marginTop: 30, style: font,
+    x: { type: "utc", label: null },
+    y: { label: "change vs window start (log scale)", ticks, tickFormat: fmt, grid: true },
+    color: { domain: ["W", "B"], range: [COL.white, COL.black] },
+    marks: [
+      Plot.rectY(long, { x: "date", interval: "month", y: "v", fill: "side", order: ["W", "B"], insetLeft: 0.5, insetRight: 0.5, fillOpacity: 0.9 }),
+      Plot.ruleY([0], { stroke: COL.ink, strokeOpacity: 0.4 }),
+      Plot.lineY(rows, { x: (d) => d3.utcDay.offset(d.date, 14), y: "c_total", stroke: COL.ink, strokeWidth: 1.5 }),
+      Plot.ruleX(rows, Plot.pointerX({ x: (d) => d3.utcDay.offset(d.date, 14), stroke: COL.muted, strokeWidth: 1 })),
+      Plot.tip(rows, Plot.pointerX({ x: (d) => d3.utcDay.offset(d.date, 14), y: "c_total",
+        title: (d) => `${d.label}\nNet    ${fmt(d.c_total)}\nWhite  ${fmt(d.c_W)}\nBlack  ${fmt(d.c_B)}\n(log contributions add: ${d.c_W?.toFixed(3)} + ${d.c_B?.toFixed(3)} = ${d.c_total?.toFixed(3)})` })),
+    ],
+  });
+}
+```
+
+```{ojs}
+//| echo: false
+{
+  const fmt = (t) => !Number.isFinite(t) ? "—" : `${t >= 0 ? "+" : ""}${Math.round(100 * (Math.exp(t) - 1))}%`;
+  const last = rows.filter((d) => Number.isFinite(d.c_total)).slice(-12);
+  const g = (k) => last.length ? d3.mean(last, (d) => d[k]) : NaN;
+  return html`<div class="dash-note">${popNote}</div>
+  ${view2 === "Attribution" ? html`<p class="dash-copy">Last 12 months vs the first 12 of the window: net <b>${fmt(g("c_total"))}</b>
+  = White <b>${fmt(g("c_W"))}</b> and Black <b>${fmt(g("c_B"))}</b> (log contributions, so they add exactly).</p>` : ""}`;
+}
+```
+:::
+
+::: {.dash-panel}
+## 3 · How often would you see it, and how often would your opponent?
+
+```{ojs}
+//| echo: false
+{
+  const P = ctl.perspective;
+  const tile = (k, v, s, color) => `<div class="dash-tile"><div class="k">${color ? key(color) : ""}${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  const typical = tile("Typical opponent meets it", oneIn(win.WxB), `along this move order; ${oneIn(win.reach)} by any order`, COL.prod);
+  let tiles;
+  if (P === "Neutral") {
+    tiles = [
+      tile("A White specialist gets it", oneIn(win.E_white), `E<sub>White</sub> = B: Black's moves decide · edge ${times(win.edge_white)}`, COL.white),
+      tile("A Black specialist gets it", oneIn(win.E_black), `E<sub>Black</sub> = W: White's moves decide · edge ${times(win.edge_black)}`, COL.black),
+      typical,
+    ];
+  } else {
+    const w = P === "White";
+    const Eyou = w ? win.E_white : win.E_black, edge = w ? win.edge_white : win.edge_black, edgeR = w ? win.edge_white_reach : win.edge_black_reach;
+    tiles = [
+      tile(`You (always play ${P}'s moves)`, oneIn(Eyou), `E<sub>${P}</sub> = ${w ? "B" : "W"}: your opponent's moves decide`, w ? COL.white : COL.black),
+      typical,
+      tile("Your familiarity edge", times(edge), `E<sub>you</sub> ÷ (W×B) = 1 ÷ ${w ? "W" : "B"} · vs true reach ${times(edgeR)}`),
+    ];
+  }
+  return D(`<div class="dash-tiles">${tiles.join("")}</div>`);
+}
+```
+
+```{ojs}
+//| echo: false
+{
+  const P = ctl.perspective;
+  const series = P === "Neutral"
+    ? [{ k: "E_white", name: "White specialist", color: COL.white }, { k: "E_black", name: "Black specialist", color: COL.black }]
+    : [{ k: P === "White" ? "E_white" : "E_black", name: `You (${P})`, color: P === "White" ? COL.white : COL.black }];
+  const legend = series.map((s) => `<span>${key(s.color)} ${s.name}</span>`).join("")
+    + `<span>${key(COL.prod, "dashed")} Typical opponent (W×B)</span><span>${key(COL.reach)} Typical, any move order (reach)</span>`;
+  const inv = (x) => Number.isFinite(x) && x > 0 ? 1 / x : NaN;
+  const chart = Plot.plot({
+    width: Math.min(width, 1100), height: 280, marginLeft: 76, marginTop: 30, style: font,
+    x: { type: "utc", label: null },
+    y: { type: "log", label: "once every … games", grid: true, tickFormat: (d) => `1 in ${d3.format("~s")(d)}`,
+         ticks: logTicks(rows.flatMap((d) => [...series.map((s) => inv(d[s.k])), inv(d.WxB), inv(d.reach)])) },
+    marks: [
+      ...series.map((s) => Plot.lineY(rows, { x: "date", y: (d) => inv(d[s.k]), stroke: s.color, strokeWidth: 2, curve: "monotone-x" })),
+      Plot.lineY(rows, { x: "date", y: (d) => inv(d.WxB), stroke: COL.prod, strokeWidth: 2, strokeDasharray: "5,4", curve: "monotone-x" }),
+      Plot.lineY(rows, { x: "date", y: (d) => inv(d.reach), stroke: COL.reach, strokeWidth: 1.5, curve: "monotone-x" }),
+      Plot.ruleX(rows, Plot.pointerX({ x: "date", stroke: COL.muted, strokeWidth: 1 })),
+      Plot.tip(rows, Plot.pointerX({ x: "date", y: (d) => inv(d.WxB),
+        title: (d) => [d.label, ...series.map((s) => `${s.name}  ${oneIn(d[s.k])}`), `Typical (W×B)  ${oneIn(d.WxB)}`, `Typical (reach)  ${oneIn(d.reach)}`].join("\n") })),
+    ],
+  });
+  return html`${D(`<div class="dash-legend">${legend}</div>`)}${chart}<div class="dash-note">${popNote}</div>`;
+}
+```
+
+::: {.dash-copy}
+**Familiarity is not soundness.** A big edge means you will have met the position many more times than the
+person across the board, which is a practical advantage, largest in fast games. It says nothing about whether the
+line is objectively good: several of the biggest edges belong to speculative gambits that engines rate as better
+for the defender.
+:::
+:::
+
+::: {.dash-panel}
+## 4 · The move path
+
+```{ojs}
+//| echo: false
+{
+  const c = win.c, T = win.T, n = win.n;
+  const fin = c.filter(Number.isFinite);
+  const minC = fin.length ? Math.min(...fin) : NaN;
+  const body = res.cnt.edges.map((e, i) => {
+    const side = i % 2 === 0 ? "White" : "Black";
+    const col = i % 2 === 0 ? COL.white : COL.black;
+    const thin = T[i] < 30 || n[i] < 1;
+    const label = `${Math.floor(i / 2) + 1}.${i % 2 === 0 ? "" : ".."} ${e[2]}`;
+    const bar = Number.isFinite(c[i]) ? `<span class="dash-bar" style="width:${Math.max(1, 160 * c[i])}px;background:${col}"></span>` : "";
+    return `<tr class="${c[i] === minC ? "rare" : ""}"><td>${i + 1}</td><td>${key(col)} ${side}</td><td class="dash-moves">${label}</td>
+      <td class="num">${thin ? `<span class="dash-gap">${pct(c[i])}</span>` : pct(c[i])}</td><td>${bar}</td>
+      <td class="num">${d3.format(",")(n[i])}</td><td class="num">${d3.format(",")(T[i])}</td></tr>`;
+  }).join("");
+  return D(`<p class="dash-sub">Each move's share among the games that reached the position before it, pooled over the window.
+  W multiplies the blue rows and B the orange ones. The rarest move is highlighted.</p>
+  <table class="dash-path"><thead><tr><th>Ply</th><th>Side</th><th>Move</th><th class="num">c<sub>i</sub></th><th></th>
+  <th class="num">Played</th><th class="num">Reached</th></tr></thead><tbody>${body}</tbody></table>
+  <p class="dash-copy">Window: W = <b>${pct(win.W)}</b>, B = <b>${pct(win.B)}</b>, W×B = <b>${pct(win.WxB)}</b>,
+  true reach = <b>${pct(win.reach)}</b> of ${d3.format(",")(win.N)} games.</p>
+  <div class="dash-note">${popNote}</div>`);
+}
+```
+:::
+
+<details><summary>Monthly numbers (table view)</summary>
+
+```{ojs}
+//| echo: false
+Inputs.table(rows.map((d) => ({ month: d.label, W: d.W, B: d.B, "W×B": d.WxB, reach: d.reach, gap: d.gap,
+  "edge (White)": d.edge_white, "edge (Black)": d.edge_black })), {
+  format: { W: (x) => pct(x), B: (x) => pct(x), "W×B": (x) => pct(x), reach: (x) => pct(x), gap: (x) => pct(x, 0),
+            "edge (White)": times, "edge (Black)": times }, rows: 12 })
+```
+</details>
+
+::: {.dash-note}
+Data: the Lichess open database, rated standard games 2013-01 to 2026-07, through a per-month opening-tree extract
+(counts summed over ply, the Lichess-explorer convention). Bots, arena/swiss games and abandoned or cheat-terminated
+games are excluded. Rating bands are by the two players' average rating. Opening names: lichess-org/chess-openings.
+:::

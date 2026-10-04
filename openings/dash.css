@@ -1,0 +1,58 @@
+/* Opening dashboard: house tokens (python/make_figs.py palette). Light only,
+   like the site theme (ember.scss / litera). */
+:root {
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --surface: #ffffff;
+  --surface-2: #f6f5f1;
+  --c-white: #2a78d6;   /* W, White */
+  --c-black: #eb6834;   /* B, Black */
+  --c-reach: #1baf7a;   /* true reach */
+  --c-prod: #52514e;    /* W x B, gray dashed */
+}
+
+body { background: var(--surface); color: var(--ink); }
+main.content { max-width: 1180px; margin: 0 auto; }
+
+.dash-lede { color: var(--ink-2); max-width: 70ch; }
+
+/* one row of filters above everything they scope */
+.dash-controls .observablehq > div { display: flex; flex-wrap: wrap; gap: 0.35rem 2rem; align-items: center; }
+.dash-controls form { width: auto !important; max-width: none; margin: 0 !important; }
+.dash-controls form > label:first-child { width: auto; font-weight: 700; color: var(--ink-2); margin-right: 0.6rem; }
+.dash-controls form select { width: auto; }
+.dash-controls { background: var(--surface);
+  border-bottom: 1px solid var(--grid); padding: 0.5rem 0 0.75rem; margin-bottom: 1rem; }
+
+.dash-picker table { font-size: 0.9rem; }
+.dash-chosen { font-size: 1.35rem; font-weight: 700; color: var(--ink); margin: 0.25rem 0 0; }
+.dash-chosen .eco { color: var(--muted); font-weight: 400; margin-right: 0.4rem; }
+.dash-moves { font-family: "Fira Code", ui-monospace, monospace; color: var(--ink-2); font-size: 0.95rem; }
+
+.dash-panel { border-top: 1px solid var(--grid); padding-top: 1rem; margin-top: 1.5rem; }
+.dash-panel h2 { font-size: 1.25rem; margin: 0 0 0.25rem; border: none; }
+.dash-sub { color: var(--ink-2); margin: 0 0 0.5rem; max-width: 75ch; }
+.dash-note { color: var(--muted); font-size: 0.8rem; margin-top: 0.25rem; }
+.dash-copy { color: var(--ink-2); font-size: 0.92rem; max-width: 75ch; }
+
+.dash-legend { display: flex; flex-wrap: wrap; gap: 0.25rem 1.25rem; font-size: 0.85rem; color: var(--ink-2); margin: 0.25rem 0; }
+.dash-legend span { display: inline-flex; align-items: center; gap: 0.4rem; }
+.dash-key { display: inline-block; width: 18px; height: 0; border-top: 2px solid; }
+.dash-key.dashed { border-top-style: dashed; }
+.dash-key.box { width: 12px; height: 12px; border: none; border-radius: 2px; }
+
+.dash-tiles { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.5rem 0 0.75rem; }
+.dash-tile { background: var(--surface-2); border-radius: 6px; padding: 0.6rem 0.9rem; min-width: 12rem; flex: 1 1 12rem; }
+.dash-tile .k { font-size: 0.8rem; color: var(--ink-2); display: flex; align-items: center; gap: 0.4rem; }
+.dash-tile .v { font-size: 1.6rem; font-weight: 700; color: var(--ink); line-height: 1.2; }
+.dash-tile .s { font-size: 0.78rem; color: var(--muted); }
+
+table.dash-path { border-collapse: collapse; font-size: 0.9rem; width: 100%; max-width: 760px; }
+table.dash-path th { text-align: left; color: var(--ink-2); font-weight: 700; border-bottom: 1px solid var(--grid); padding: 0.25rem 0.5rem; }
+table.dash-path td { padding: 0.2rem 0.5rem; border-bottom: 1px solid var(--surface-2); font-variant-numeric: tabular-nums; }
+table.dash-path td.num { text-align: right; }
+table.dash-path tr.rare td { background: #fff4ec; }
+.dash-bar { display: inline-block; height: 8px; border-radius: 0 4px 4px 0; vertical-align: middle; }
+.dash-gap { color: var(--muted); }

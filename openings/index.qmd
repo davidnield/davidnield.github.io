@@ -18,6 +18,9 @@ resources:
   - data/index.json
   - data/positions.json
   - data/nodes/*.json
+  - pieces/*.svg
+  - pieces/LICENSE.txt
+  - pieces/SOURCES.json
 ---
 
 ::: {.dash-lede}
@@ -81,7 +84,7 @@ viewof pooled = Inputs.toggle({ label: "3-month pooling", value: hashParams.get(
 ::: {.dash-explorer}
 ::: {.dash-board-col}
 ```{ojs}
-viewof line = createBoard({ Chess: ChessLib.Chess, moves: initialMoves })
+viewof line = createBoard({ Chess: ChessLib.Chess, moves: initialMoves, pieceBase: "pieces/" })
 ```
 :::
 
@@ -490,6 +493,7 @@ Inputs.table(rows.map((d) => ({ month: d.label, W: d.W, B: d.B, "W×B": d.WxB, r
 Data: the Lichess open database, rated standard games 2013-01 to 2026-07, through a per-month opening-tree extract
 (counts summed over ply, the Lichess-explorer convention). Bots, arena/swiss games and abandoned or cheat-terminated
 games are excluded. Rating bands are by the two players' average rating. Opening names: lichess-org/chess-openings.
-The data cover the positions on the named lines and every move between two of them. Board: chess.js (BSD-2-Clause);
-pieces are Unicode chess symbols.
+The data cover the positions on the named lines and every move between two of them. Board: chess.js (BSD-2-Clause).
+Chess pieces by Colin M.L. Burnett (Cburnett), via Wikimedia Commons, used under the BSD licence
+([licence and sources](pieces/LICENSE.txt)).
 :::

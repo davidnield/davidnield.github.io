@@ -92,15 +92,16 @@ table.dash-path tr.rare td { background: #fff4ec; }
 
 .cb { width: 100%; max-width: 480px; }
 .cb-board svg { display: block; width: 100%; height: auto; touch-action: none; user-select: none; border-radius: 3px; outline: none; }
+/* board: Lichess's default brown theme (colours only; no lila board images) */
 .cb-light { fill: #f0d9b5; } .cb-dark { fill: #b58863; }
-.cb-last { fill: rgba(205, 210, 106, .55); } .cb-sel { fill: rgba(20, 85, 30, .45); }
-.cb-hint { fill: rgba(20, 85, 30, .45); } .cb-hint-cap { fill: none; stroke: rgba(20, 85, 30, .45); stroke-width: .08; }
+.cb-last { fill: rgba(155, 199, 0, .41); } .cb-sel { fill: rgba(20, 85, 30, .5); }
+.cb-hint { fill: rgba(20, 85, 30, .5); } .cb-hint-cap { fill: none; stroke: rgba(20, 85, 30, .5); stroke-width: .08; }
 .cb-coord { font-size: .2px; font-family: sans-serif; font-weight: 700; } .cb-coord.on-light { fill: #b58863; } .cb-coord.on-dark { fill: #f0d9b5; }
-.cb-piece { font-size: .86px; cursor: grab;
-  font-family: "Segoe UI Symbol", "Noto Sans Symbols 2", "Noto Sans Symbols", "DejaVu Sans", "Apple Symbols", "Arial Unicode MS", serif; }
-.cb-white { fill: #fff; stroke: #1b1b1b; stroke-width: .035px; paint-order: stroke; }
-.cb-black { fill: #1b1b1b; stroke: #1b1b1b; stroke-width: .01px; }
-.cb-dragging { pointer-events: none; cursor: grabbing; opacity: .9; }
+.cb-piece { cursor: grab; }
+.cb-dragging { pointer-events: none; cursor: grabbing; }
+.cb-dim { fill: rgba(250, 250, 250, .7); }
+.cb-promo { cursor: pointer; }
+.cb-promo-bg { fill: #b0b0b0; } .cb-promo:hover .cb-promo-bg { fill: #d64f00; }
 .cb-bar { display: flex; gap: 0.3rem; margin: 0.4rem 0; flex-wrap: wrap; }
 .cb-bar button { font: inherit; line-height: 1.4; color: var(--ink); background: var(--surface-2); border: 1px solid #c9c8c0; border-radius: 4px; padding: 0.1rem 0.7rem; cursor: pointer; }
 .cb-bar button:hover:not(:disabled) { border-color: var(--ink-2); background: #ecebe5; }

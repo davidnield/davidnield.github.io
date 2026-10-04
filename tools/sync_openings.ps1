@@ -9,7 +9,7 @@
     and theme.
 
     The page itself is copied, not its build output. Quarto build and project files are skipped:
-    _quarto.yml, _publish.yml, ember.scss (the site supplies the theme), .quarto/, _site/, _freeze/, *_files/, __pycache__/, .ipynb_checkpoints/.
+    _quarto.yml, _publish.yml, ember.scss (the site supplies the theme), RELEASE.json, .quarto/, _site/, _freeze/, *_files/, __pycache__/, .ipynb_checkpoints/.
     The dashboard's index.qmd replaces the placeholder openings/index.qmd. Restore the placeholder with
     `git checkout -- openings/index.qmd`.
 
@@ -57,7 +57,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $Source 'index.qmd'))) {
     throw "No index.qmd in $Source. Is this the dashboard folder?"
 }
 
-$skipFiles = @('_quarto.yml', '_publish.yml', 'ember.scss')
+$skipFiles = @('_quarto.yml', '_publish.yml', 'ember.scss', 'RELEASE.json')
 $skipDirs = @('.quarto', '_site', '_freeze', '__pycache__', '.ipynb_checkpoints')
 
 $sourceRoot = (Resolve-Path -LiteralPath $Source).Path.TrimEnd('\')

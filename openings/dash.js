@@ -165,10 +165,13 @@ function decodeTuple(code) {
 export const posKey3 = (fen) => fen.split(" ").slice(0, 3).join(" ");
 export const posKey4 = (fen) => fen.split(" ").slice(0, 4).join(" ");
 
-export function makeStore(base) {
+// version: appended as ?v= to every data URL, so a new release never reads a
+// cached file from the previous one.
+export function makeStore(base, version = "") {
   const cache = new Map();
   let positions = null;
-  const getJSON = (url) => fetch(url).then((r) => { if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); });
+  const q = version ? `?v=${encodeURIComponent(version)}` : "";
+  const getJSON = (url) => fetch(url + q).then((r) => { if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); });
   const store = {
     index: null,
     async loadIndex() {

@@ -4,7 +4,7 @@
 // under the BSD licence; see pieces/LICENSE.txt and pieces/SOURCES.json),
 // served unmodified from pieces/. Colours follow Lichess's default brown theme.
 //
-//   const el = createBoard({ Chess, moves: ["e4", "e5"], pieceBase: "pieces/" });
+//   const el = createBoard({ Chess, moves: ["e4", "e5"], pieceBase: "pieces/", version });
 //   el.value          // SAN moves up to the cursor (the position shown)
 //   el.setLine(moves) // replace the line and move the cursor to its end
 //   el.addEventListener("input", ...)   // fired on every change
@@ -24,7 +24,7 @@ function svg(tag, attrs = {}, parent) {
   return el;
 }
 
-export function createBoard({ Chess, moves = [], orientation = "white", pieceBase = "pieces/" } = {}) {
+export function createBoard({ Chess, moves = [], orientation = "white", pieceBase = "pieces/", version = "" } = {}) {
   let line = [];
   let ply = 0;
   let flipped = orientation === "black";
@@ -32,7 +32,8 @@ export function createBoard({ Chess, moves = [], orientation = "white", pieceBas
   let drag = null;
   let promo = null;   // { from, to, color } while the promotion picker is open
   let game = new Chess();
-  const src = (p) => `${pieceBase}Chess_${p.type}${p.color === "w" ? "l" : "d"}t45.svg`;
+  const vq = version ? `?v=${encodeURIComponent(version)}` : "";
+  const src = (p) => `${pieceBase}Chess_${p.type}${p.color === "w" ? "l" : "d"}t45.svg${vq}`;
   // warm the cache so the first drawn position has its pieces
   for (const t of "kqrbnp") for (const c of "wb") { const i = new Image(); i.src = src({ type: t, color: c }); }
 

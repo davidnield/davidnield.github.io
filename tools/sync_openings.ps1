@@ -16,6 +16,10 @@
     With -Clean, everything in openings/ is deleted before the copy, so files removed upstream don't
     linger. Without it, files are added or overwritten only.
 
+    The data is committed to git and served by GitHub Pages, so the script checks sizes first. It
+    warns when a file is over 20 MB or the total is over 150 MB (the dashboard spec's budget), and
+    refuses to copy a file over 100 MB, which GitHub would reject on push.
+
     The script only copies files. It never renders, commits or publishes. After syncing, run
     `quarto render` (or `quarto preview`) and check the Openings page.
 
@@ -69,6 +73,18 @@ $totalMB = [math]::Round((($files | Measure-Object Length -Sum).Sum) / 1MB, 1)
 Write-Host "Source:      $sourceRoot"
 Write-Host "Destination: $dest"
 Write-Host "Files:       $($files.Count) ($totalMB MB)"
+
+$tooBig = $files | Where-Object { $_.Length -gt 100MB }
+if ($tooBig) {
+    $tooBig | ForEach-Object { Write-Warning ("{0}: {1:N1} MB" -f $_.FullName, ($_.Length / 1MB)) }
+    throw 'Files over 100 MB would be rejected by GitHub. Split them before syncing.'
+}
+$files | Where-Object { $_.Length -gt 20MB } | ForEach-Object {
+    Write-Warning ("Over 20 MB: {0} ({1:N1} MB). Consider splitting it." -f $_.FullName.Substring($sourceRoot.Length + 1), ($_.Length / 1MB))
+}
+if ($totalMB -gt 150) {
+    Write-Warning "Total $totalMB MB is over the 150 MB budget."
+}
 
 if ($DryRun) {
     $files | ForEach-Object { '  ' + $_.FullName.Substring($sourceRoot.Length + 1) }

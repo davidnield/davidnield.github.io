@@ -1,0 +1,4 @@
+# Chess piece SVGs from Wikimedia Commons must stay byte-identical: they are checked against the
+# Commons SHA-1s in pieces/SOURCES.json, and some use CRLF line endings. No end-of-line conversion.
+openings/pieces/** -text
+docs/openings/pieces/** -text

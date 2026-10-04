@@ -1,6 +1,11 @@
 project:
   type: website
   output-dir: docs
+  # Copied into docs/ on every render. A full render empties docs/, and GitHub Pages
+  # needs CNAME (custom domain dnield.com) and .nojekyll (serve files as-is).
+  resources:
+    - CNAME
+    - .nojekyll
 
 website:
   # title: "Personal Website"

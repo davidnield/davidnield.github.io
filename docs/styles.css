@@ -1,1 +1,23 @@
 /* css styles */
+/* Blog: the "No posts yet" note shows only while the listing is empty. */
+main:has(.quarto-post) .blog-empty {
+  display: none;
+}
+
+/* Openings dashboard at phone width. dash.css centres main.content with auto margins, which in
+   Quarto's page grid sizes it to its widest table (~620px) and makes phones zoom out. Pin it to
+   the column and let wide tables scroll sideways instead. */
+main.content:has(.dash-picker) {
+  width: 100%;
+  min-width: 0;
+}
+main.content:has(.dash-picker) form:has(> table) {
+  max-width: 100%;
+  overflow-x: auto;
+}
+@media (max-width: 767.98px) {
+  main.content:has(.dash-picker) table.dash-path {
+    display: block;
+    overflow-x: auto;
+  }
+}

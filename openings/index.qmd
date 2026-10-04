@@ -7,7 +7,7 @@ format:
   html:
     # dash.css is linked with the release version (cache-busting), not via `css:`
     include-in-header:
-      text: '<link rel="stylesheet" href="dash.css?v=89f6803ee063">'
+      text: '<link rel="stylesheet" href="dash.css?v=648eccd308b0">'
     toc: false
     page-layout: full
     anchor-sections: false
@@ -18,6 +18,7 @@ resources:
   - dash.js
   - board.js
   - controls.js
+  - export.js
   - data/index.json
   - data/positions.json
   - data/nodes/*.json
@@ -39,11 +40,12 @@ second question: if you always play the line, you get it whenever your *opponent
 // release stamped by python/stamp_release.py, so a deploy never mixes with a
 // browser's cached copy of the previous release (GitHub Pages sends max-age=600,
 // and module caches can outlive it).
-VERSION = "89f6803ee063"
+VERSION = "648eccd308b0"
 asset = (path) => new URL(`${path}?v=${VERSION}`, document.baseURI).href
 dashMod = import(asset("dash.js"))
 boardMod = import(asset("board.js"))
 controlsMod = import(asset("controls.js"))
+exportMod = import(asset("export.js"))
 makeStore = dashMod.makeStore
 toPlain = dashMod.toPlain
 monthDate = dashMod.monthDate
@@ -51,6 +53,10 @@ monthLabel = dashMod.monthLabel
 createBoard = boardMod.createBoard
 multiSelect = controlsMod.multiSelect
 bandSummary = controlsMod.bandSummary
+chartWithDownload = exportMod.chartWithDownload
+exportChart = exportMod.exportChart
+EXPORT_FONT = exportMod.EXPORT_FONT
+slugify = exportMod.slug
 Plot = import("https://cdn.jsdelivr.net/npm/@observablehq/plot@0.6.16/+esm")
 ChessLib = import("https://cdn.jsdelivr.net/npm/chess.js@1.4.0/dist/esm/chess.js")
 store = makeStore("data", VERSION)
@@ -262,6 +268,30 @@ lineText = (moves) => moves.length ? ix.pgn(moves) : "the start position"
   if (view2 === "Attribution") p.set("view", "attribution");
   history.replaceState(null, "", "#" + p.toString().replace(/%2C/g, ","));
 }
+// What a chart describes, for its PNG export. The panels follow the line up
+// to its last in-tree position (treeLine), so that is the move order named.
+chartName = {
+  if (!treeLine.length) return { title: "Start position", subtitle: "Move order: none (the start position)", slug: "start-position" };
+  const nm = namedAlong;
+  const exact = nm && nm.at === treeLine.length && nm.o.moves.join(" ") === treeLine.join(" ");
+  const base = nm ? `${nm.o.eco} ${nm.o.name}` : "Unnamed line";
+  let subtitle = `Move order: ${ix.pgn(treeLine)}`;
+  if (offTree) subtitle += `. The entered line, ${ix.pgn(line)}, leaves the named-opening tree after this; the chart follows it up to here.`;
+  return {
+    title: exact ? base : `${base} (via ${ix.pgn(treeLine)})`,
+    subtitle,
+    slug: nm ? `${nm.o.eco}_${slugify(nm.o.name)}` : "line",
+  };
+}
+exportSpec = (panel, panelSlug, build, legend) => ({
+  build, legend,
+  title: `${chartName.title} — ${panel}`,
+  subtitle: chartName.subtitle,
+  footer: popNote,
+  source: "Source: dnield.com/openings · Lichess open database",
+  filename: `opening_${chartName.slug}_${panelSlug}_${monthLabel(ix, m0)}_${monthLabel(ix, m1)}.png`,
+})
+exportFontStyle = (fontFamily) => fontFamily ? { ...font, fontFamily, fontSize: "13px" } : font
 // gate-4 hook: the page's own numbers for any line, read back through the browser pane
 {
   window.dashCompute = async (moves, sp, bd, a, b, sm) => {
@@ -296,8 +326,9 @@ D(`<div class="dash-legend">
 ```
 
 ```{ojs}
-Plot.plot({
-  width: Math.min(width, 1100), height: 300, marginLeft: 68, marginTop: 30, style: font,
+//| output: false
+chart1 = (w, fontFamily) => Plot.plot({
+  width: w, height: 300, marginLeft: 68, marginTop: 30, style: exportFontStyle(fontFamily),
   x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)] },
   y: { type: scale1, label: "share of games", tickFormat: tickPct, grid: true, ...(scale1 === "log" ? { ticks: logTicks(rows.flatMap((d) => [d.reach_lo, d.reach_hi, d.WxB])) } : { nice: true }) },
   marks: [
@@ -309,6 +340,14 @@ Plot.plot({
       title: (d) => `${d.label}\nTrue reach  ${pct(d.reach)}  (${pct(d.reach_lo)}–${pct(d.reach_hi)})\nW×B         ${pct(d.WxB)}\nThis order carries ${pct(d.gap, 0)}` })),
   ],
 })
+```
+
+```{ojs}
+chartWithDownload(chart1(Math.max(240, Math.min(width, 1100))), () => exportSpec("How popular is it?", "popularity",
+  (w) => chart1(w, EXPORT_FONT), [
+    { label: "True reach: any move order", color: COL.reach, kind: "line" },
+    { label: "W×B: this move order only", color: COL.prod, kind: "dashed" },
+    { label: "95% interval", color: COL.reach, kind: "area" }]))
 ```
 
 ```{ojs}
@@ -337,10 +376,11 @@ contributions add up exactly to the net change, with no interaction left over.</
 ```
 
 ```{ojs}
-{
+//| output: false
+chart2 = (w, fontFamily) => {
   if (view2 === "Levels") {
     return Plot.plot({
-      width: Math.min(width, 1100), height: 300, marginLeft: 68, marginTop: 30, style: font,
+      width: w, height: 300, marginLeft: 68, marginTop: 30, style: exportFontStyle(fontFamily),
       x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)] },
       y: { type: scale1, label: "probability", tickFormat: tickPct, grid: true, ...(scale1 === "log" ? { ticks: logTicks(rows.flatMap((d) => [d.W_lo, d.W_hi, d.B_lo, d.B_hi])) } : { nice: true }) },
       marks: [
@@ -361,11 +401,11 @@ contributions add up exactly to the net change, with no interaction left over.</
   const ext = d3.extent([...long.map((d) => d.v), ...rows.map((d) => d.c_total).filter(Number.isFinite),
     ...rows.map((d) => Math.max(0, d.c_W) + Math.max(0, d.c_B)).filter(Number.isFinite),
     ...rows.map((d) => Math.min(0, d.c_W) + Math.min(0, d.c_B)).filter(Number.isFinite), 0]);
-  const cands = [-0.9, -0.75, -0.5, -0.33, -0.2, -0.1, 0, 0.1, 0.25, 0.5, 1, 2, 4, 9];
+  const cands = [-0.9, -0.75, -0.5, -0.33, -0.2, -0.1, 0, 0.1, 0.25, 0.5, 0.75, 1, 2, 4, 9];
   const ticks = cands.map((p) => Math.log(1 + p)).filter((t) => t >= ext[0] - 0.05 && t <= ext[1] + 0.05);
   const fmt = (t) => { const p = Math.exp(t) - 1; return Math.abs(p) < 1e-9 ? "0%" : `${p > 0 ? "+" : ""}${Math.round(100 * p)}%`; };
   return Plot.plot({
-    width: Math.min(width, 1100), height: 300, marginLeft: 68, marginTop: 30, style: font,
+    width: w, height: 300, marginLeft: 68, marginTop: 30, style: exportFontStyle(fontFamily),
     x: { type: "utc", label: null, domain: [monthDate(ix, m0), d3.utcMonth.offset(monthDate(ix, m1), 1)] },
     y: { label: "change vs window start (log scale)", ticks, tickFormat: fmt, grid: true },
     color: { domain: ["W", "B"], range: [COL.white, COL.black] },
@@ -379,6 +419,18 @@ contributions add up exactly to the net change, with no interaction left over.</
     ],
   });
 }
+```
+
+```{ojs}
+chartWithDownload(chart2(Math.max(240, Math.min(width, 1100))), () => view2 === "Levels"
+  ? exportSpec("Who moved it: W and B", "who-moved-it-levels", (w) => chart2(w, EXPORT_FONT), [
+      { label: "W: White steers here", color: COL.white, kind: "line" },
+      { label: "B: Black allows it", color: COL.black, kind: "line" },
+      { label: "shaded: 95% interval", color: COL.muted, kind: "area" }])
+  : exportSpec("Who moved it: change since the window start", "who-moved-it-attribution", (w) => chart2(w, EXPORT_FONT), [
+      { label: "White's contribution", color: COL.white, kind: "box" },
+      { label: "Black's contribution", color: COL.black, kind: "box" },
+      { label: "Net change in W×B (log scale; the parts add exactly)", color: COL.ink, kind: "line" }]))
 ```
 
 ```{ojs}
@@ -429,29 +481,42 @@ viewof persp = Inputs.select(["White", "Black", "Both sides"], { label: "Perspec
 ```
 
 ```{ojs}
-{
-  const P = persp;
-  const series = P === "Both sides"
-    ? [{ k: "E_white", name: "White specialist", color: COL.white }, { k: "E_black", name: "Black specialist", color: COL.black }]
-    : [{ k: P === "White" ? "E_white" : "E_black", name: `You (${P})`, color: P === "White" ? COL.white : COL.black }];
-  const legend = series.map((s) => `<span>${key(s.color)} ${s.name}</span>`).join("")
-    + `<span>${key(COL.prod, "dashed")} Typical opponent (W×B)</span><span>${key(COL.reach)} Typical, any move order (reach)</span>`;
+//| output: false
+series3 = persp === "Both sides"
+  ? [{ k: "E_white", name: "White specialist", color: COL.white }, { k: "E_black", name: "Black specialist", color: COL.black }]
+  : [{ k: persp === "White" ? "E_white" : "E_black", name: `You (${persp})`, color: persp === "White" ? COL.white : COL.black }]
+```
+
+```{ojs}
+//| output: false
+chart3 = (w, fontFamily) => {
   const inv = (x) => Number.isFinite(x) && x > 0 ? 1 / x : NaN;
-  const chart = Plot.plot({
-    width: Math.min(width, 1100), height: 280, marginLeft: 76, marginTop: 30, style: font,
+  return Plot.plot({
+    width: w, height: 280, marginLeft: 76, marginTop: 30, style: exportFontStyle(fontFamily),
     x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)] },
     y: { type: "log", label: "once every … games", grid: true, tickFormat: (d) => `1 in ${d3.format("~s")(d)}`,
-         ticks: logTicks(rows.flatMap((d) => [...series.map((s) => inv(d[s.k])), inv(d.WxB), inv(d.reach)])) },
+         ticks: logTicks(rows.flatMap((d) => [...series3.map((s) => inv(d[s.k])), inv(d.WxB), inv(d.reach)])) },
     marks: [
-      ...series.map((s) => Plot.lineY(rows, { x: "date", y: (d) => inv(d[s.k]), stroke: s.color, strokeWidth: 2, curve: "monotone-x" })),
+      ...series3.map((s) => Plot.lineY(rows, { x: "date", y: (d) => inv(d[s.k]), stroke: s.color, strokeWidth: 2, curve: "monotone-x" })),
       Plot.lineY(rows, { x: "date", y: (d) => inv(d.WxB), stroke: COL.prod, strokeWidth: 2, strokeDasharray: "5,4", curve: "monotone-x" }),
       Plot.lineY(rows, { x: "date", y: (d) => inv(d.reach), stroke: COL.reach, strokeWidth: 1.5, curve: "monotone-x" }),
       Plot.ruleX(rows, Plot.pointerX({ x: "date", stroke: COL.muted, strokeWidth: 1 })),
       Plot.tip(rows, Plot.pointerX({ x: "date", y: (d) => inv(d.WxB),
-        title: (d) => [d.label, ...series.map((s) => `${s.name}  ${oneIn(d[s.k])}`), `Typical (W×B)  ${oneIn(d.WxB)}`, `Typical (reach)  ${oneIn(d.reach)}`].join("\n") })),
+        title: (d) => [d.label, ...series3.map((s) => `${s.name}  ${oneIn(d[s.k])}`), `Typical (W×B)  ${oneIn(d.WxB)}`, `Typical (reach)  ${oneIn(d.reach)}`].join("\n") })),
     ],
   });
-  return html`${D(`<div class="dash-legend">${legend}</div>`)}${chart}<div class="dash-note">${popNote}</div>`;
+}
+```
+
+```{ojs}
+{
+  const legend3 = [...series3.map((s) => ({ label: s.name, color: s.color, kind: "line" })),
+    { label: "Typical opponent (W×B)", color: COL.prod, kind: "dashed" },
+    { label: "Typical, any move order (reach)", color: COL.reach, kind: "line" }];
+  const legend = legend3.map((l) => `<span>${key(l.color, l.kind === "dashed" ? "dashed" : "solid")} ${l.name ?? l.label}</span>`).join("");
+  const panel = persp === "Both sides" ? "White and Black specialists vs a typical opponent" : `You (${persp}) vs your opponent`;
+  const box = chartWithDownload(chart3(Math.max(240, Math.min(width, 1100))), () => exportSpec(panel, "you-vs-opponent", (w) => chart3(w, EXPORT_FONT), legend3));
+  return html`${D(`<div class="dash-legend">${legend}</div>`)}${box}<div class="dash-note">${popNote}</div>`;
 }
 ```
 

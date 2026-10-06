@@ -66,7 +66,7 @@ M = ix.n_months
 openingRows = ix.openings.map((o) => ({ id: o.id, eco: o.eco, name: o.name, moves: ix.pgn(o.moves), line: o.moves, plies: o.moves.length, rank: o.rank }))
 ITALIAN = ["e4", "e5", "Nf3", "Nc6", "Bc4"]
 // Shareable state in the URL hash:
-//   #moves=e4,e5,Nf3&speeds=Blitz,Rapid&bands=1600,1800&from=2019-01&to=2021-12&smooth=3&view=attribution
+//   #moves=e4,e5,Nf3&speeds=Blitz,Rapid&bands=1600,1800&from=2019-01&to=2021-12&smooth=3&view=levels
 //   (from= defaults to 2021-01 and to= to the latest month; both are written only when they differ)
 // (#opening=<id> from v1 links still works: it sets the board to that line)
 hashParams = new URLSearchParams(location.hash.slice(1))
@@ -271,7 +271,7 @@ lineText = (moves) => moves.length ? ix.pgn(moves) : "the start position"
   if (m0 !== DEFAULT_FROM) p.set("from", monthLabel(ix, m0));
   if (m1 !== M - 1) p.set("to", monthLabel(ix, m1));
   if (smooth === 3) p.set("smooth", "3");
-  if (view2 === "Attribution") p.set("view", "attribution");
+  if (view2 === "Levels") p.set("view", "levels");
   history.replaceState(null, "", "#" + p.toString().replace(/%2C/g, ","));
 }
 // What a chart describes, for its PNG export. The panels follow the line up
@@ -367,7 +367,7 @@ html`<div class="dash-note">${popNote}</div>
 ## 2 · Who moved it, White or Black?
 
 ```{ojs}
-viewof view2 = Inputs.radio(["Levels", "Attribution"], { label: "View", value: hashParams.get("view") === "attribution" ? "Attribution" : "Levels" })
+viewof view2 = Inputs.radio(["Attribution", "Levels"], { label: "View", value: hashParams.get("view") === "levels" ? "Levels" : "Attribution" })
 ```
 
 ```{ojs}

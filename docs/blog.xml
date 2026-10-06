@@ -10,6 +10,44 @@
 <atom:link href="https://dnield.com/blog.xml" rel="self" type="application/rss+xml"/>
 <description></description>
 <generator>quarto-1.10.18</generator>
-<lastBuildDate>Tue, 06 Oct 2026 03:31:49 GMT</lastBuildDate>
+<lastBuildDate>Tue, 06 Oct 2026 07:00:00 GMT</lastBuildDate>
+<item>
+  <title>Sample post: the template</title>
+  <dc:creator>David Nield</dc:creator>
+  <link>https://dnield.com/posts/sample-post/</link>
+  <description><![CDATA[ 
+
+
+
+
+<p>Open with a concrete hook, not a thesis. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. This post will do three things: show one figure, quote one number, and end with an honest caveats section.</p>
+<section id="what-was-measured" class="level1">
+<h1>What was measured</h1>
+<p>Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris. A key number goes in bold, like <strong>1 in 17,700 games</strong>, and carries its provenance: the artifact, the filter and the population.</p>
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="https://dnield.com/posts/sample-post/fig_placeholder.png" class="img-fluid figure-img"></p>
+<figcaption>Placeholder figure. Every real figure names its population in the subtitle or caption.</figcaption>
+</figure>
+</div>
+<section id="a-sub-step" class="level2">
+<h2 class="anchored" data-anchor-id="a-sub-step">A sub-step</h2>
+<p>Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Link generously and credit sources, for example the <a href="../../openings/index.html">opening dashboard</a>.</p>
+</section>
+</section>
+<section id="why-this-isnt-the-whole-story" class="level1">
+<h1>Why this isn’t the whole story</h1>
+<p>Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum. Say what the data shows and what it does not.</p>
+<p><em>Method: filler text only. A real post names the corpus, the filter and the game count here, plus the script in <code>analysis/</code> that produced each figure.</em></p>
+
+
+</section>
+
+ ]]></description>
+  <category>Template</category>
+  <guid>https://dnield.com/posts/sample-post/</guid>
+  <pubDate>Tue, 06 Oct 2026 07:00:00 GMT</pubDate>
+  <media:content url="https://dnield.com/posts/sample-post/fig_placeholder.png" medium="image" type="image/png" height="76" width="144"/>
+</item>
 </channel>
 </rss>

@@ -7,7 +7,7 @@ format:
   html:
     # dash.css is linked with the release version (cache-busting), not via `css:`
     include-in-header:
-      text: '<link rel="stylesheet" href="dash.css?v=648eccd308b0">'
+      text: '<link rel="stylesheet" href="dash.css?v=0507bdfbc43a">'
     toc: false
     page-layout: full
     anchor-sections: false
@@ -40,7 +40,7 @@ second question: if you always play the line, you get it whenever your *opponent
 // release stamped by python/stamp_release.py, so a deploy never mixes with a
 // browser's cached copy of the previous release (GitHub Pages sends max-age=600,
 // and module caches can outlive it).
-VERSION = "648eccd308b0"
+VERSION = "0507bdfbc43a"
 asset = (path) => new URL(`${path}?v=${VERSION}`, document.baseURI).href
 dashMod = import(asset("dash.js"))
 boardMod = import(asset("board.js"))
@@ -67,15 +67,21 @@ openingRows = ix.openings.map((o) => ({ id: o.id, eco: o.eco, name: o.name, move
 ITALIAN = ["e4", "e5", "Nf3", "Nc6", "Bc4"]
 // Shareable state in the URL hash:
 //   #moves=e4,e5,Nf3&speeds=Blitz,Rapid&bands=1600,1800&from=2019-01&to=2021-12&smooth=3&view=attribution
+//   (from= defaults to 2021-01 and to= to the latest month; both are written only when they differ)
 // (#opening=<id> from v1 links still works: it sets the board to that line)
 hashParams = new URLSearchParams(location.hash.slice(1))
 hashList = (k) => hashParams.has(k) ? hashParams.get(k).split(",").filter(Boolean) : null
-hashMonth = (k, dflt) => {
-  const m = /^(\d{4})-(\d{2})$/.exec(hashParams.get(k) ?? "");
+monthIndex = (s) => {
+  const m = /^(\d{4})-(\d{2})$/.exec(s ?? "");
   const [y0, mm0] = ix.first_month.split("-").map(Number);
-  const i = m ? (+m[1] - y0) * 12 + (+m[2] - mm0) : dflt;
-  return Math.max(0, Math.min(M - 1, i));
+  return m ? Math.max(0, Math.min(M - 1, (+m[1] - y0) * 12 + (+m[2] - mm0))) : null;
 }
+// The window opens on 2021-01 .. latest month by default (2013-2020 is the early,
+// thin Lichess era); #from= / #to= override it. A link that gives only an early
+// #to= (v1.4 omitted from= when it was the first month) keeps meaning "from the start".
+DEFAULT_FROM = monthIndex("2021-01") ?? 0
+hashMonth = (k, dflt) => monthIndex(hashParams.get(k)) ?? dflt
+fromDefault = (hashMonth("to", M - 1) < DEFAULT_FROM) ? 0 : DEFAULT_FROM
 initialMoves = hashList("moves") ?? (hashParams.has("opening") ? ix.byId.get(+hashParams.get("opening"))?.moves : null) ?? ITALIAN
 ```
 
@@ -93,7 +99,7 @@ viewof bands = multiSelect({ label: "Rating", options: ix.bands,
 
 ```{ojs}
 viewof period = Inputs.form({
-  from: Inputs.select(d3.range(M), { label: "From", value: hashMonth("from", 0), format: (i) => monthLabel(ix, i) }),
+  from: Inputs.select(d3.range(M), { label: "From", value: hashMonth("from", fromDefault), format: (i) => monthLabel(ix, i) }),
   to: Inputs.select(d3.range(M), { label: "To", value: hashMonth("to", M - 1), format: (i) => monthLabel(ix, i) }),
 })
 ```
@@ -262,7 +268,7 @@ lineText = (moves) => moves.length ? ix.pgn(moves) : "the start position"
   p.set("moves", line.join(","));
   if (speeds.length !== ix.speeds.length) p.set("speeds", speeds.join(","));
   if (bands.length !== ix.bands.length) p.set("bands", bands.join(","));
-  if (m0 !== 0) p.set("from", monthLabel(ix, m0));
+  if (m0 !== DEFAULT_FROM) p.set("from", monthLabel(ix, m0));
   if (m1 !== M - 1) p.set("to", monthLabel(ix, m1));
   if (smooth === 3) p.set("smooth", "3");
   if (view2 === "Attribution") p.set("view", "attribution");

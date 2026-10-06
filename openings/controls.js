@@ -44,18 +44,67 @@ export function multiSelect({ label, options, value = options, format = String, 
     btn.textContent = (summary || defaultSummary)(vals, options) + " ▾";
     root.value = vals;
     if (notify) root.dispatchEvent(new Event("input", { bubbles: true }));
+    if (!menu.hidden) place();
   }
   function set(vals) { sel = new Set(vals); update(true); }
 
-  const close = () => { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
-  btn.addEventListener("click", (ev) => {
-    ev.stopPropagation();
-    menu.hidden = !menu.hidden;
-    btn.setAttribute("aria-expanded", String(!menu.hidden));
-  });
-  menu.addEventListener("click", (ev) => ev.stopPropagation());
-  document.addEventListener("click", close);
-  root.addEventListener("keydown", (ev) => { if (ev.key === "Escape") { close(); btn.focus(); } });
+  // The open menu is position: fixed, placed from the button's rect, so it
+  // overlays the page instead of extending the scroll area of Quarto's
+  // overflow: auto output-cell wrappers (scrollbars on desktop; on iOS, where
+  // scrollbars are invisible overlays, the tap looked like it did nothing).
+  const SHEET = window.matchMedia("(max-width: 575.98px)");
+  const GAP = 4, EDGE = 8;
+  function place() {
+    const de = document.documentElement;
+    const vw = de.clientWidth || window.innerWidth;
+    const vh = de.clientHeight || window.innerHeight;
+    const r = btn.getBoundingClientRect();
+    const sheet = SHEET.matches;
+    menu.classList.toggle("ms-sheet", sheet);
+    menu.style.maxHeight = "";
+    menu.style.width = "";
+    menu.style.minWidth = "";
+    if (sheet) {   // phone: a full-width sheet under (or over) the button
+      menu.style.left = EDGE + "px";
+      menu.style.width = (vw - 2 * EDGE) + "px";
+    } else {
+      menu.style.left = "0px";
+      const w = Math.max(menu.offsetWidth, 0);
+      menu.style.left = Math.max(EDGE, Math.min(r.left, vw - w - EDGE)) + "px";
+    }
+    const need = menu.offsetHeight;
+    const below = vh - r.bottom - GAP - EDGE, above = r.top - GAP - EDGE;
+    const up = need > below && above > below;     // flip only if it helps
+    const room = Math.max(0, up ? above : below);
+    if (need > room) menu.style.maxHeight = room + "px";   // scrolls inside itself
+    const h = Math.min(need, room);
+    menu.style.top = (up ? r.top - GAP - h : r.bottom + GAP) + "px";
+  }
+  const outside = (ev) => { if (!root.contains(ev.target)) close(); };
+  // any scroll that is not the menu's own closes it (the button would move away)
+  const onScroll = (ev) => { if (!menu.contains(ev.target)) close(); };
+  // Escape closes from anywhere: Safari doesn't focus a button on tap, so the key
+  // may not come from inside the menu
+  const onKey = (ev) => { if (ev.key === "Escape") { close(); btn.focus(); } };
+  function open() {
+    menu.hidden = false;
+    btn.setAttribute("aria-expanded", "true");
+    place();
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("resize", place);
+  }
+  function close() {
+    if (menu.hidden) return;
+    menu.hidden = true;
+    btn.setAttribute("aria-expanded", "false");
+    document.removeEventListener("pointerdown", outside, true);
+    document.removeEventListener("keydown", onKey);
+    window.removeEventListener("scroll", onScroll, true);
+    window.removeEventListener("resize", place);
+  }
+  btn.addEventListener("click", () => (menu.hidden ? open() : close()));
 
   update(false);
   return root;

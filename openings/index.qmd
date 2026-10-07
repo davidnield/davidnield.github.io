@@ -67,7 +67,7 @@ openingRows = ix.openings.map((o) => ({ id: o.id, eco: o.eco, name: o.name, move
 ITALIAN = ["e4", "e5", "Nf3", "Nc6", "Bc4"]
 // Shareable state in the URL hash:
 //   #moves=e4,e5,Nf3&speeds=Blitz,Rapid&bands=1600,1800&from=2019-01&to=2021-12&smooth=3&view=levels
-//   (from= defaults to 2021-01 and to= to the latest month; both are written only when they differ)
+//   (from= defaults to 2017-01 and to= to the latest month; both are written only when they differ)
 // (#opening=<id> from v1 links still works: it sets the board to that line)
 hashParams = new URLSearchParams(location.hash.slice(1))
 hashList = (k) => hashParams.has(k) ? hashParams.get(k).split(",").filter(Boolean) : null
@@ -76,10 +76,10 @@ monthIndex = (s) => {
   const [y0, mm0] = ix.first_month.split("-").map(Number);
   return m ? Math.max(0, Math.min(M - 1, (+m[1] - y0) * 12 + (+m[2] - mm0))) : null;
 }
-// The window opens on 2021-01 .. latest month by default (2013-2020 is the early,
+// The window opens on 2017-01 .. latest month by default (2013-2016 is the early,
 // thin Lichess era); #from= / #to= override it. A link that gives only an early
 // #to= (v1.4 omitted from= when it was the first month) keeps meaning "from the start".
-DEFAULT_FROM = monthIndex("2021-01") ?? 0
+DEFAULT_FROM = monthIndex("2017-01") ?? 0
 hashMonth = (k, dflt) => monthIndex(hashParams.get(k)) ?? dflt
 fromDefault = (hashMonth("to", M - 1) < DEFAULT_FROM) ? 0 : DEFAULT_FROM
 initialMoves = hashList("moves") ?? (hashParams.has("opening") ? ix.byId.get(+hashParams.get("opening"))?.moves : null) ?? ITALIAN

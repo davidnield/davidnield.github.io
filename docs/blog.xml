@@ -56,18 +56,24 @@
 <td style="text-align: right;">+0.9%</td>
 </tr>
 <tr class="even">
+<td style="text-align: left;">1. e4 c5</td>
+<td style="text-align: right;">11.354%</td>
+<td style="text-align: right;">11.843%</td>
+<td style="text-align: right;">+4.3%</td>
+</tr>
+<tr class="odd">
 <td style="text-align: left;">1. e4 c5 2. Nf3</td>
 <td style="text-align: right;">6.172%</td>
 <td style="text-align: right;">6.542%</td>
 <td style="text-align: right;">+6.0%</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td style="text-align: left;">1. e4 c5 2. Nf3 Nc6</td>
 <td style="text-align: right;">2.31%</td>
 <td style="text-align: right;">2.649%</td>
 <td style="text-align: right;">+14.7%</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td style="text-align: left;">1. e4 c5 2. Nf3 Nc6 3. Bb5 (the Rossolimo)</td>
 <td style="text-align: right;">0.291%</td>
 <td style="text-align: right;">0.383%</td>
@@ -75,9 +81,9 @@
 </tr>
 </tbody>
 </table>
-<p>The change in 1. e4’s popularity is indiscernible from random noise in the graph, but the changes compound with each additional move.</p>
+<p>The changes in 1. e4’s and 1… c5’s popularity are indiscernible from random noise in the graph, but the changes compound with each additional move.</p>
 <p>But yes, just from the changes in the popularity of 2… Nc6 and 3. Bb5 you can reasonably infer that the aggregate popularity of the Rossolimo was probably driven by some combination of White players giving 3. Bb5 a try, and Black players giving Nc6 Sicilian a try. But then, how do you quantify the relative impact? And which color is the subsequent falloff in popularity attributable to? Checking the graphs of all of these positions in order to answer these kinds of questions is kind of a pain in the butt…</p>
-<p>Which leads me to my point: <strong>the issue with “opening explorers” is that they don’t really give you statistics about the</strong> <strong>opening</strong>, <strong>they give you statistics about a</strong> <strong>position</strong>. For example, in the popularity graph above, and in the typical Opening Explorer table below, the Lichess opening explorer will tell you what percentage of the time a position has occurred (in the graph above) or in how many games across the selected time span (table below), and how many times (and what percentage of the time) the player-to-move (White in this case) makes each legal move from this position, and the score rate for the position and each move.</p>
+<p>Which leads me to my point: the issue with “opening explorers” is that they don’t really give you statistics about the <strong>opening</strong>, they give you statistics about a <strong>position</strong>. For example, the graph above shows what percentage of games reach a position, and the table below shows how many games reached it over the selected time span, how often the player to move (White, in this case) plays each legal move from it, and the score rate for the position and for each move.</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="https://dnield.com/posts/rossolimo/lichess-opening-explorer.png" class="img-fluid figure-img"></p>

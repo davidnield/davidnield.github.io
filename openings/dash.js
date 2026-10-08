@@ -2,11 +2,12 @@
 // attribution. Mirrors python/build_opening_series.py operation for operation
 // (same sums, same product order), which is what gate 4 checks to 1e-9.
 //
-// Data (python/build_site_data.py, format 2):
-//   data/index.json      months, slices, N, root node, named openings
+// Data (python/build_site_data.py, format 3):
+//   data/index.json      months, slices, N, root node, named openings, results_nodes
 //   data/nodes/<id>.json one position: T (games continuing), D = A - T (or A),
 //                        in [[parent, SAN, n]] (edges into it), out [[SAN,
-//                        child, all-time results]] (edges out of it)
+//                        child, all-time results]] (edges out of it), and at a
+//                        named final position R [runs(white wins), runs(draws)]
 //   data/positions.json  lazy: FEN-prefix key -> node, for re-entering the tree
 // A series is sparse runs [slice, firstMonth, code].
 
@@ -105,21 +106,41 @@ export function metricsAt(N, T, n, A) {
   };
 }
 
+// Results at the final position (the "Win percentage" metric), from (pooled)
+// counts of the A games arriving by any move order: W white wins, D draws,
+// black = A - W - D. Score is White's view, (W + D/2)/A; its 95% interval is
+// the normal one on the per-game score (1, 1/2, 0), clipped to [0, 1].
+// Suppressed (NaN) when A < MIN_T. Same operation order as the Python.
+export const RESULT_KEYS = ["win_w", "win_d", "win_b", "score", "score_lo", "score_hi", "res_n"];
+
+export function resultsAt(A, W, D) {
+  if (!(A >= MIN_T)) { const out = {}; for (const k of RESULT_KEYS) out[k] = NaN; return out; }
+  const score = (W + D / 2) / A;
+  const half = Z95 * Math.sqrt(Math.max(0, (W + D / 4) / A - score * score) / A);
+  return {
+    win_w: W / A, win_d: D / A, win_b: (A - W - D) / A, score,
+    score_lo: Math.min(1, Math.max(0, score - half)), score_hi: Math.min(1, Math.max(0, score + half)), res_n: A,
+  };
+}
+
 export const SERIES_KEYS = ["W", "B", "WxB", "reach", "gap", "E_white", "E_black", "edge_white", "edge_black",
-  "edge_white_reach", "edge_black_reach", "W_lo", "W_hi", "B_lo", "B_hi", "reach_lo", "reach_hi"];
+  "edge_white_reach", "edge_black_reach", "W_lo", "W_hi", "B_lo", "B_hi", "reach_lo", "reach_hi", ...RESULT_KEYS];
 
 // Monthly series over the whole data range (pooling sees the neighbours
 // outside the visible window, exactly as the Python does).
 export function monthly(cnt, smooth) {
   const N = pool(cnt.N, smooth), A = pool(cnt.A, smooth);
   const T = cnt.T.map((x) => pool(x, smooth)), n = cnt.n.map((x) => pool(x, smooth));
+  const R = cnt.R ? { A: pool(cnt.R.A, smooth), W: pool(cnt.R.W, smooth), D: pool(cnt.R.D, smooth) } : null;
   const M = N.length, out = { valid: new Array(M), reach_valid: new Array(M), c: [] };
   for (const k of SERIES_KEYS) out[k] = new Float64Array(M);
   for (let m = 0; m < M; m++) {
     const r = metricsAt(N[m], T.map((x) => x[m]), n.map((x) => x[m]), A[m]);
+    Object.assign(r, resultsAt(R ? R.A[m] : NaN, R ? R.W[m] : NaN, R ? R.D[m] : NaN));
     for (const k of SERIES_KEYS) out[k][m] = r[k];
     out.valid[m] = r.valid; out.reach_valid[m] = r.reach_valid; out.c.push(r.c);
   }
+  out.hasResults = !!R;
   return out;
 }
 
@@ -127,6 +148,7 @@ export function monthly(cnt, smooth) {
 export function windowSummary(cnt, m0, m1) {
   const s = (x) => { let t = 0; for (let m = m0; m <= m1; m++) t += x[m]; return t; };
   const r = metricsAt(s(cnt.N), cnt.T.map(s), cnt.n.map(s), s(cnt.A));
+  Object.assign(r, cnt.R ? resultsAt(s(cnt.R.A), s(cnt.R.W), s(cnt.R.D)) : resultsAt(NaN, NaN, NaN));
   r.T = cnt.T.map(s); r.n = cnt.n.map(s); r.N = s(cnt.N); r.A = s(cnt.A);
   return r;
 }
@@ -152,6 +174,13 @@ export function attribution(ser, m0, m1, baselineMonths = 12) {
 }
 
 // ---------------------------------------------------------------- loading
+
+// Monthly A, white wins W and draws D at a loaded node for a slice mask; null
+// where the data ship no results (not a named opening's final position).
+export function resultsFor(node, A, mask, nMonths) {
+  if (!node.R) return null;
+  return { A, W: sumRuns(node.R[0], mask, nMonths), D: sumRuns(node.R[1], mask, nMonths) };
+}
 
 // Run codes for a short tuple (the all-time results [w, d, b]).
 function decodeTuple(code) {
@@ -243,6 +272,7 @@ export function makeStore(base, version = "") {
         T: parents.map((nd) => sumRuns(nd.T, mask, M)),
         n: edges.map((e, i) => sumRuns(kids[i].in.find((r) => r[0] === e.parent && r[1] === e.san)[2], mask, M)),
         A,
+        R: resultsFor(fin, A, mask, M),
         edges,
       };
     },

@@ -52,6 +52,13 @@ main.content form:has(> table) { max-width: 100%; overflow-x: auto; }
 .dash-key { display: inline-block; width: 18px; height: 0; border-top: 2px solid; }
 .dash-key.dashed { border-top-style: dashed; }
 .dash-key.box { width: 12px; height: 12px; border: none; border-radius: 2px; }
+.dash-key.thick { border-top-width: 3px; }
+
+/* v1.7: panel 1's Metric and Scale radios share a row (Scale is hidden under Win percentage) */
+.dash-radios { display: flex; flex-wrap: wrap; gap: 0 2rem; align-items: center; }
+.dash-radios > .cell { margin: 0; }
+.dash-radios form { width: auto !important; max-width: 100%; }
+.dash-unavail { margin: 0.5rem 0; }
 
 .dash-tiles { display: flex; flex-wrap: wrap; gap: 0.75rem; margin: 0.5rem 0 0.75rem; }
 .dash-tile { background: var(--surface-2); border-radius: 6px; padding: 0.6rem 0.9rem; min-width: 12rem; flex: 1 1 12rem; }
@@ -157,6 +164,7 @@ table.dash-ex tr.other td { color: var(--muted); }
 .dash-dl:hover, .dash-size:hover { color: var(--ink); border-color: var(--ink-2); }
 .dash-dl:focus-visible, .dash-size:focus-visible { outline: 2px solid var(--c-white); outline-offset: 1px; }
 .dash-dl:disabled { opacity: .5; cursor: progress; }
+.dash-dl.off:disabled { cursor: not-allowed; }
 @media (max-width: 575.98px) {
   .dash-dl span { display: none; }   /* icon only on phones; the aria-label still names it */
   .dash-dl, .dash-size { min-height: 36px; }

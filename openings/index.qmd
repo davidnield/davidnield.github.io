@@ -7,7 +7,7 @@ format:
   html:
     # dash.css is linked with the release version (cache-busting), not via `css:`
     include-in-header:
-      text: '<link rel="stylesheet" href="dash.css?v=fd26166c7024">'
+      text: '<link rel="stylesheet" href="dash.css?v=c6693d072ab1">'
     toc: false
     page-layout: full
     anchor-sections: false
@@ -40,7 +40,7 @@ second question: if you always play the line, you get it whenever your *opponent
 // release stamped by python/stamp_release.py, so a deploy never mixes with a
 // browser's cached copy of the previous release (GitHub Pages sends max-age=600,
 // and module caches can outlive it).
-VERSION = "fd26166c7024"
+VERSION = "c6693d072ab1"
 asset = (path) => new URL(`${path}?v=${VERSION}`, document.baseURI).href
 dashMod = import(asset("dash.js"))
 boardMod = import(asset("board.js"))
@@ -66,8 +66,9 @@ M = ix.n_months
 openingRows = ix.openings.map((o) => ({ id: o.id, eco: o.eco, name: o.name, moves: ix.pgn(o.moves), line: o.moves, plies: o.moves.length, rank: o.rank }))
 ITALIAN = ["e4", "e5", "Nf3", "Nc6", "Bc4"]
 // Shareable state in the URL hash:
-//   #moves=e4,e5,Nf3&speeds=Blitz,Rapid&bands=1600,1800&from=2019-01&to=2021-12&smooth=3&view=levels
-//   (from= defaults to 2017-01 and to= to the latest month; both are written only when they differ)
+//   #moves=e4,e5,Nf3&speeds=Blitz,Rapid&bands=1600,1800&from=2019-01&to=2021-12&smooth=3&metric=results&view=levels
+//   (from= defaults to 2017-01 and to= to the latest month; both are written only when they differ;
+//   metric=results opens panel 1 on Win percentage and is written only then: Popularity is the default)
 // (#opening=<id> from v1 links still works: it sets the board to that line)
 hashParams = new URLSearchParams(location.hash.slice(1))
 hashList = (k) => hashParams.has(k) ? hashParams.get(k).split(",").filter(Boolean) : null
@@ -228,7 +229,8 @@ rows = res.cnt ? d3.range(m0, m1 + 1).map((m, j) => {
   const s = res.ser, a = res.att;
   const r = { m, date: monthDate(ix, m), label: monthLabel(ix, m) };
   for (const k of ["W", "B", "WxB", "reach", "gap", "E_white", "E_black", "edge_white", "edge_black",
-                   "edge_white_reach", "edge_black_reach", "W_lo", "W_hi", "B_lo", "B_hi", "reach_lo", "reach_hi"])
+                   "edge_white_reach", "edge_black_reach", "W_lo", "W_hi", "B_lo", "B_hi", "reach_lo", "reach_hi",
+                   "win_w", "win_d", "win_b", "score", "score_lo", "score_hi", "res_n"])
     r[k] = Number.isFinite(s[k][m]) ? s[k][m] : NaN;
   r.c_W = a.c_W[j]; r.c_B = a.c_B[j]; r.c_total = a.c_total[j];
   return r;
@@ -271,6 +273,7 @@ lineText = (moves) => moves.length ? ix.pgn(moves) : "the start position"
   if (m0 !== DEFAULT_FROM) p.set("from", monthLabel(ix, m0));
   if (m1 !== M - 1) p.set("to", monthLabel(ix, m1));
   if (smooth === 3) p.set("smooth", "3");
+  if (metric1 === "Win percentage") p.set("metric", "results");
   if (view2 === "Levels") p.set("view", "levels");
   history.replaceState(null, "", "#" + p.toString().replace(/%2C/g, ","));
 }
@@ -289,11 +292,11 @@ chartName = {
     slug: nm ? `${nm.o.eco}_${slugify(nm.o.name)}` : "line",
   };
 }
-exportSpec = (panel, panelSlug, build, legend) => ({
+exportSpec = (panel, panelSlug, build, legend, footNote) => ({
   build, legend,
   title: `${chartName.title} — ${panel}`,
   subtitle: chartName.subtitle,
-  footer: popNote,
+  footer: footNote ? `${popNote} ${footNote}` : popNote,
   source: "Source: dnield.com/openings · Lichess open database",
   filename: `opening_${chartName.slug}_${panelSlug}_${monthLabel(ix, m0)}_${monthLabel(ix, m1)}.png`,
 })
@@ -333,17 +336,45 @@ res.cnt ? html`` : D(`<p class="dash-callout">Make a move on the board (or pick 
 ```
 
 ::: {.dash-panel}
-## 1 · How popular is it?
+```{ojs}
+// the panel's title follows the metric
+html`<h2 class="dash-h2">${results1 ? "1 · How does it score?" : "1 · How popular is it?"}</h2>`
+```
+
+::: {.dash-radios}
+```{ojs}
+viewof metric1 = Inputs.radio(["Popularity", "Win percentage"], { label: "Metric",
+  value: hashParams.get("metric") === "results" ? "Win percentage" : "Popularity" })
+```
 
 ```{ojs}
 viewof scale1 = Inputs.radio(["log", "linear"], { label: "Scale", value: "log" })
 ```
+:::
 
 ```{ojs}
-D(`<div class="dash-legend">
+//| output: false
+results1 = metric1 === "Win percentage"
+// Win percentage has a linear axis only: the Scale choice is hidden (it is kept,
+// and panel 2's Levels chart still follows it)
+{ viewof scale1.style.display = results1 ? "none" : ""; }
+// results ship only at the named openings' final positions
+hasResults = !!(res.cnt && res.ser.hasResults)
+COL_DRAW = "#8f8d86"   // COL.draw darkened so a thin line holds up on white
+sc = (x) => Number.isFinite(x) ? x.toFixed(3) : "—"
+games = (x) => !Number.isFinite(x) ? "—" : x >= 1e6 ? `${(x / 1e6).toFixed(2)} M` : d3.format(",")(x)
+RESULTS_FOOT = "Results of games reaching this position by any move order; score = (wins + ½ draws) / games, White's view."
+```
+
+```{ojs}
+!results1 ? D(`<div class="dash-legend">
   <span>${key(COL.reach)} True reach: any move order</span>
   <span>${key(COL.prod, "dashed")} W×B: this move order only</span>
   <span>${key(COL.reach, "box").replace("background:", "opacity:.25;background:")} 95% interval</span></div>`)
+: !hasResults ? html`` : D(`<div class="dash-legend">
+  <span>${key(COL.white)} White wins</span><span>${key(COL_DRAW)} Draws</span><span>${key(COL.black)} Black wins</span>
+  <span>${key(COL.ink, "thick")} Average score (White's view)</span>
+  <span>${key(COL.ink, "box").replace("background:", "opacity:.18;background:")} 95% interval on the score</span></div>`)
 ```
 
 ```{ojs}
@@ -364,17 +395,63 @@ chart1 = (w, h, P) => { const L = plotLayout(P, h, w, { hDefault: 300, mlBanner:
 ```
 
 ```{ojs}
-chartWithDownload(chart1(Math.max(240, Math.min(width, 1100))), () => exportSpec("How popular is it?", "popularity",
-  (w, h, P) => chart1(w, h, P), [
-    { label: "True reach: any move order", color: COL.reach, kind: "line" },
-    { label: "W×B: this move order only", color: COL.prod, kind: "dashed" },
-    { label: "95% interval", color: COL.reach, kind: "area" }]))
+//| output: false
+// Win percentage: results of the games reaching the final position by any move order.
+// The score (W + D/2)/A shares the percentage axis (a score of 0.5 sits at 50%).
+chart1r = (w, h, P) => { const L = plotLayout(P, h, w, { hDefault: 300, mlBanner: 68, mlK: 3.6 }); return Plot.plot({
+  width: w, ...L,
+  x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)], ...xTicks(P, w, L.marginLeft) },
+  y: { type: "linear", label: "share of games / score", tickFormat: tickPct, grid: true, nice: true,
+       domain: [0, Math.max(0.6, d3.max(rows.flatMap((d) => [d.win_w, d.win_b, d.score_hi]).filter(Number.isFinite)) ?? 0)],
+       ...(P && !P.legacy ? { ticks: yMax(P, L) } : {}) },
+  marks: [
+    Plot.areaY(rows, { x: "date", y1: "score_lo", y2: "score_hi", fill: COL.ink, fillOpacity: 0.18, curve: "monotone-x" }),
+    Plot.lineY(rows, { x: "date", y: "win_d", stroke: COL_DRAW, strokeWidth: 1.75, curve: "monotone-x" }),
+    Plot.lineY(rows, { x: "date", y: "win_b", stroke: COL.black, strokeWidth: 1.75, curve: "monotone-x" }),
+    Plot.lineY(rows, { x: "date", y: "win_w", stroke: COL.white, strokeWidth: 1.75, curve: "monotone-x" }),
+    Plot.lineY(rows, { x: "date", y: "score", stroke: COL.ink, strokeWidth: 2.75, curve: "monotone-x" }),
+    Plot.ruleX(rows, Plot.pointerX({ x: "date", stroke: COL.muted, strokeWidth: 1 })),
+    Plot.tip(rows, Plot.pointerX({ x: "date", y: "score",
+      title: (d) => `${d.label}\nWhite wins  ${pct(d.win_w)}\nDraws       ${pct(d.win_d)}\nBlack wins  ${pct(d.win_b)}\nScore       ${sc(d.score)}  (${sc(d.score_lo)}–${sc(d.score_hi)})\n${games(d.res_n)} games` })),
+  ],
+}) }
 ```
 
 ```{ojs}
-html`<div class="dash-note">${popNote}</div>
+{
+  if (!results1)
+    return chartWithDownload(chart1(Math.max(240, Math.min(width, 1100))), () => exportSpec("How popular is it?", "popularity",
+      (w, h, P) => chart1(w, h, P), [
+        { label: "True reach: any move order", color: COL.reach, kind: "line" },
+        { label: "W×B: this move order only", color: COL.prod, kind: "dashed" },
+        { label: "95% interval", color: COL.reach, kind: "area" }]));
+  if (!hasResults) {
+    // no results here: a note in the chart's place, and its Download disabled
+    const box = chartWithDownload(D(`<p class="dash-callout dash-unavail">Monthly results are available for the named openings'
+      final positions. Enter or pick a named opening.</p>`), () => null);
+    const b = box.querySelector(".dash-dl");
+    b.disabled = true; b.classList.add("off");
+    b.title = "Nothing to download: monthly results are available for the named openings' final positions";
+    return box;
+  }
+  return chartWithDownload(chart1r(Math.max(240, Math.min(width, 1100))), () => exportSpec("How does it score?", "results",
+    (w, h, P) => chart1r(w, h, P), [
+      { label: "White wins", color: COL.white, kind: "line" },
+      { label: "Draws", color: COL_DRAW, kind: "line" },
+      { label: "Black wins", color: COL.black, kind: "line" },
+      { label: "Average score (White's view)", color: COL.ink, kind: "line" },
+      { label: "95% interval on the score", color: COL.ink, kind: "area" }], RESULTS_FOOT));
+}
+```
+
+```{ojs}
+!results1 ? html`<div class="dash-note">${popNote}</div>
 <p class="dash-copy">Over this window, this move order accounts for
 <b>${pct(win.gap, 0)}</b> of the games that reach the position (W×B ${pct(win.WxB)} vs true reach ${pct(win.reach)}).</p>`
+: !hasResults ? html`<div class="dash-note">${popNote}</div>`
+: html`<div class="dash-note">${popNote} ${RESULTS_FOOT}</div>
+<p class="dash-copy">Over this window: White <b>${pct(win.win_w)}</b> · Draw <b>${pct(win.win_d)}</b> · Black <b>${pct(win.win_b)}</b>
+· average score <b>${sc(win.score)}</b> (${games(win.res_n)} games).</p>`
 ```
 :::
 
@@ -590,7 +667,8 @@ Inputs.table(rows.map((d) => ({ month: d.label, W: d.W, B: d.B, "W×B": d.WxB, r
 Data: the Lichess open database, rated standard games 2013-01 to 2026-07, through a per-month opening-tree extract
 (counts summed over ply, the Lichess-explorer convention). Bots, arena/swiss games and abandoned or cheat-terminated
 games are excluded. Rating bands are by the two players' average rating. Opening names: lichess-org/chess-openings.
-The data cover the positions on the named lines and every move between two of them. Board: chess.js (BSD-2-Clause).
+The data cover the positions on the named lines and every move between two of them. Panel 1's win percentages are
+the results of the games that reach a named opening's final position by any move order, counted from White's side. Board: chess.js (BSD-2-Clause).
 Chess pieces by Colin M.L. Burnett (Cburnett), via Wikimedia Commons, used under the BSD licence
 ([licence and sources](pieces/LICENSE.txt)).
 :::

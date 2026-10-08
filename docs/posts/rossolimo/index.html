@@ -204,15 +204,15 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 <section id="what-happened-to-the-rossolimo" class="level1">
 <h1>What happened to the Rossolimo?</h1>
 <p>In November 2018, the Lichess Openings Explorer shows that the Rossolimo had a sudden surge in popularity, growing from occurring in 0.291% of games in October to 0.383% of games in November, a small (0.092%) increase in nominal terms, but a huge jump (31%!) in relative terms. Given the suddenness of the spike after over a year of stability, then a gradual decline back to its normal 0.3% levels over the next few years, it’s extremely unlikely that this was just random noise.</p>
-<p>Followers of competitive chess might notice right away that this was the month that the 2018 World Chess Championship started, featuring Fabiano Caruana as the challenger to Magnus Carlsen, and the obvious reason for this sudden spike in the Rossolimo’s popularity was due to the fact that the Rossolimo featured prominently in this title match, with Caruana choosing 1. e4 for all of the non-tie break games in the match, and Magnus choosing the Sicilian, intending to play the Sveshnikov in the Open Sicilian, during all of these games.</p>
-<p>It seems likely the competitive chess watchers following the match decided to pick up and try using the openings being used in the most watched match of the year, being played between the world #1 and #2 at the time, both rated over 2800 and only 3 rating points separating them at the time of the match.</p>
-<p>But here’s an interesting question: was this increase in popularity driven by White players switching to the Rossolimo? or by Black players switching to the Nc6 Sicilian? Or both?</p>
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="lichess-rossolimo-popularity.png" class="img-fluid figure-img"></p>
 <figcaption>The Rossolimo’s popularity on the Lichess Opening Explorer, with a sharp spike in November 2018.</figcaption>
 </figure>
 </div>
+<p>Followers of competitive chess might notice right away that this was the month that the 2018 World Chess Championship started, featuring Fabiano Caruana as the challenger to Magnus Carlsen, and the obvious reason for this sudden spike in the Rossolimo’s popularity was due to the fact that the Rossolimo featured prominently in this title match, with Caruana choosing 1. e4 for all of the non-tie break games in the match, and Magnus choosing the Sicilian, intending to play the Sveshnikov in the Open Sicilian, during all of these games.</p>
+<p>It seems likely the competitive chess watchers following the match decided to pick up and try using the openings being used in the most watched match of the year, being played between the world #1 and #2 at the time, both rated over 2800 and only 3 rating points separating them at the time of the match.</p>
+<p>But here’s an interesting question: was this increase in popularity driven by White players switching to the Rossolimo? or by Black players switching to the Nc6 Sicilian? Or both?</p>
 <p>You could answer this by just checking and recording the popularity of each of the prior positions in the path to the Rossolimo, and seeing whether we see this same graph shape in each of them. We do, but the relative change gets bigger the deeper into the opening you go:</p>
 <table class="caption-top table">
 <colgroup>
@@ -268,7 +268,7 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 <div class="quarto-figure quarto-figure-center">
 <figure class="figure">
 <p><img src="lichess-opening-explorer.png" class="img-fluid figure-img"></p>
-<figcaption>The Lichess Opening Explorer table for the position after 1. e4 c5 2. Nf3 Nc6.</figcaption>
+<figcaption>The Lichess Opening Explorer table for the Rossolimo position</figcaption>
 </figure>
 </div>
 </section>
@@ -277,7 +277,7 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 <p>1. How often <strong>you</strong> would get to play the opening, if it was in your repertoire,</p>
 <p>2. How opponents would see the opening when facing players other than you,</p>
 <p>3. Is the increase or decline in the popularity of an opening being driven by one color not playing as often? or because the other color isn’t giving them the chance to play it as often?</p>
-<p>These are all the types of questions that chess opening data nerds like me would want to know, and they’re super simple to calculate/answer given the data within these tables!</p>
+<p>These are all the types of questions that chess opening data nerds like me would want to know, and they’re super simple to calculate/answer given the data within these tables, but it requires you to record the sequence of probabilities, not just the probabilities you see in the current position.</p>
 <p>Let’s take question 1: if we wanted to calculate how often we would get to play the Rossolimo as White, all we need to do is take the probability that Black plays 1… c5 when faced with 1. e4 (which is 17.3% across all Lichess rated standard games, excluding arena and swiss tournaments and bots) and multiply that by the probability that Black plays 2… Nc6 after we play 2. Nf3 (which is 42.5%). 17.3% x 42.5% = 7.4% probability that White gets to play the Rossolimo in any given game. That’s <strong>way</strong> higher than the 0.383% probability we saw earlier, right? That’s because we take <strong>our moves as given</strong>, we don’t need to include the probability that <strong>we</strong>&nbsp;will play 1. e4, 2. Nf3, or 3. Bb5 in the calculation because we <strong>know</strong>&nbsp;we will play them.</p>
 <p>Answering question 2 means doing the exact opposite: given that our opponent plays the Nc6 Sicilian, the probability that they would face the Rossolimo means multiplying the probability that their opponent will play 1. e4 (59%), will respond to their 1… c5 move with 2. Nf3 (52.3%), and then respond to their 2… Nc6 move with 3. Bb5 (12.7%), for a final probability of 3.9%.</p>
 <p>One fun corollary of the answers to questions 1 and 2 is that, with these probabilities, you can then calculate how much more experience in the opening than you will have than your opponent by simply taking the ratio of the percentage of the time you get to play it over the probability of the time they will face it, so White Rossolimo players will have 7.4% / 3.9% = 1.9x as much experience in Rossolimo positions as their opponents will.</p>
@@ -302,10 +302,10 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 </section>
 <section id="wrapping-up" class="level1">
 <h1>Wrapping up</h1>
-<p>I want to make one thing super clear: this post is not meant to be a criticism of Lichess, the design of its opening explorer, or anything of the sort. The visual simplicity of Lichess’s database table is one of its greatest strengths, and adding any of these visualizations/statistics would require adding a substantial amount of visual clutter and significantly complicating their design, for capabilities only a niche set of opening data nerds like me would ever use.</p>
-<p>This post, and all of the tools that I’ve built on the <a href="../../openings/index.html">Openings section of my website</a> (which are interactive and available for free so you can explore these and other stats for any named opening, across any time control, rating bracket, or time period) wouldn’t be possible without Lichess making their data freely available to the public.</p>
+<p>I want to make one thing super clear: this post is not meant to be a criticism of Lichess, the design of its opening explorer, or anything of the sort. The visual simplicity of Lichess’s database table is one of its greatest strengths, and adding any of these visualizations/statistics would require adding a substantial amount of visual clutter and significantly complicate their design, for capabilities only a niche set of opening data nerds like me would ever use.</p>
+<p>This post, and all of the tools that I’ve built on the <a href="../../openings/index.html">Openings section of my website</a> (which are interactive and available for free so you can explore these and other stats for any named opening, across any time control, rating bracket, or time period) wouldn’t be possible without Lichess making their data freely available to the public. I am eternally grateful for their contributions to Chess data world, with special thanks to Christopher Akiki for his work making Lichess’s data even more accessible on Huggingface.</p>
 <p>This was just a hobby project of mine to 1. make it easier to answer the types of questions that I like to investigate, 2. see how easy it is to host an interactive dashboard on my personal website, and 3. give me the chance to write about something that I think is cool.</p>
-<p>I hope you think it’s cool too. Give the <a href="../../openings/index.html">Openings section</a> of my website a whirl. I’ve added little one-click export “Download” buttons for exporting any visualizations you make as pngs for making it easy to share what you find, and I hope you do.</p>
+<p>I hope you think it’s cool too. Give the <a href="../../openings/index.html">Openings section</a> of my website a whirl. I’ve added little one-click export “Download” buttons for exporting any visualizations you make as pngs for making it easy to share what you find.</p>
 
 
 </section>

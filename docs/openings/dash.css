@@ -147,15 +147,19 @@ table.dash-ex tr.other td { color: var(--muted); }
 .dash-wdl .b { background: #2b2b2b; color: #eee; }
 .dash-wdl.empty { background: var(--surface-2); }
 
-/* ---- v1.4: one-button PNG export, top-right of each chart ---- */
+/* ---- v1.4: one-button PNG export; v1.6: with a size choice, above each chart ---- */
 .dash-chart { position: relative; }
-.dash-dl { position: absolute; top: 0; right: 0; z-index: 2; display: inline-flex; align-items: center; gap: 0.3rem;
-  font: inherit; font-size: 0.78rem; line-height: 1; color: var(--ink-2); background: rgba(255, 255, 255, .9);
-  border: 1px solid #d3d2ca; border-radius: 4px; padding: 0.25rem 0.45rem; cursor: pointer; }
-.dash-dl:hover { color: var(--ink); border-color: var(--ink-2); }
-.dash-dl:focus-visible { outline: 2px solid var(--c-white); outline-offset: 1px; }
+.dash-dlbar { display: flex; justify-content: flex-end; align-items: center; gap: 0.4rem; margin: 0 0 0.25rem; }
+.dash-size, .dash-dl { font: inherit; font-size: 0.78rem; line-height: 1; color: var(--ink-2); background: rgba(255, 255, 255, .9);
+  border: 1px solid #d3d2ca; border-radius: 4px; cursor: pointer; }
+.dash-size { padding: 0.25rem 0.3rem; max-width: 9.5rem; }
+.dash-dl { display: inline-flex; align-items: center; gap: 0.3rem; padding: 0.25rem 0.45rem; }
+.dash-dl:hover, .dash-size:hover { color: var(--ink); border-color: var(--ink-2); }
+.dash-dl:focus-visible, .dash-size:focus-visible { outline: 2px solid var(--c-white); outline-offset: 1px; }
 .dash-dl:disabled { opacity: .5; cursor: progress; }
 @media (max-width: 575.98px) {
   .dash-dl span { display: none; }   /* icon only on phones; the aria-label still names it */
-  .dash-dl { padding: 0.3rem; }
+  .dash-dl, .dash-size { min-height: 36px; }
+  .dash-dl { padding: 0.3rem 0.6rem; }
+  .dash-size { font-size: 0.85rem; padding: 0.3rem; }
 }

@@ -1,5 +1,5 @@
 // Compute core for the opening dashboard: count files -> W, B, reach, edge,
-// attribution. Mirrors python/build_opening_series.py operation for operation
+// specialist edge, attribution. Mirrors python/build_opening_series.py operation for operation
 // (same sums, same product order), which is what gate 4 checks to 1e-9.
 //
 // Data (python/build_site_data.py, format 3):
@@ -99,6 +99,11 @@ export function metricsAt(N, T, n, A) {
     reach: R(reach), gap: PR(WxB / reach),
     E_white: P(B), E_black: P(W), edge_white: P(1 / W), edge_black: P(1 / B),
     edge_white_reach: PR(B / reach), edge_black_reach: PR(W / reach),
+    spec_edge_white: P(B / W), spec_edge_black: P(W / B),
+    spec_edge_white_lo: P(Math.exp(Math.log(B / W) - Z95 * Math.sqrt(vW + vB))),
+    spec_edge_white_hi: P(Math.exp(Math.log(B / W) + Z95 * Math.sqrt(vW + vB))),
+    spec_edge_black_lo: P(Math.exp(Math.log(W / B) - Z95 * Math.sqrt(vW + vB))),
+    spec_edge_black_hi: P(Math.exp(Math.log(W / B) + Z95 * Math.sqrt(vW + vB))),
     W_lo: P(Math.exp(Math.log(W) - Z95 * Math.sqrt(vW))), W_hi: P(Math.exp(Math.log(W) + Z95 * Math.sqrt(vW))),
     B_lo: P(Math.exp(Math.log(B) - Z95 * Math.sqrt(vB))), B_hi: P(Math.exp(Math.log(B) + Z95 * Math.sqrt(vB))),
     reach_lo: R(Math.exp(Math.log(reach) - Z95 * Math.sqrt(vR))),
@@ -123,8 +128,14 @@ export function resultsAt(A, W, D) {
   };
 }
 
+// v1.8: the specialist edge, E_you / E_opponent-specialist: White B/W, Black W/B (reciprocals).
+// 95% interval by the delta method, Var(log B/W) = vW + vB.
+export const SPEC_KEYS = ["spec_edge_white", "spec_edge_black", "spec_edge_white_lo", "spec_edge_white_hi",
+  "spec_edge_black_lo", "spec_edge_black_hi"];
+
 export const SERIES_KEYS = ["W", "B", "WxB", "reach", "gap", "E_white", "E_black", "edge_white", "edge_black",
-  "edge_white_reach", "edge_black_reach", "W_lo", "W_hi", "B_lo", "B_hi", "reach_lo", "reach_hi", ...RESULT_KEYS];
+  "edge_white_reach", "edge_black_reach", "W_lo", "W_hi", "B_lo", "B_hi", "reach_lo", "reach_hi", ...RESULT_KEYS,
+  ...SPEC_KEYS];
 
 // Monthly series over the whole data range (pooling sees the neighbours
 // outside the visible window, exactly as the Python does).

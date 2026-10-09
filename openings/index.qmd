@@ -7,7 +7,7 @@ format:
   html:
     # dash.css is linked with the release version (cache-busting), not via `css:`
     include-in-header:
-      text: '<link rel="stylesheet" href="dash.css?v=c6693d072ab1">'
+      text: '<link rel="stylesheet" href="dash.css?v=5c094bbcf53d">'
     toc: false
     page-layout: full
     anchor-sections: false
@@ -40,7 +40,7 @@ second question: if you always play the line, you get it whenever your *opponent
 // release stamped by python/stamp_release.py, so a deploy never mixes with a
 // browser's cached copy of the previous release (GitHub Pages sends max-age=600,
 // and module caches can outlive it).
-VERSION = "c6693d072ab1"
+VERSION = "5c094bbcf53d"
 asset = (path) => new URL(`${path}?v=${VERSION}`, document.baseURI).href
 dashMod = import(asset("dash.js"))
 boardMod = import(asset("board.js"))
@@ -66,9 +66,10 @@ M = ix.n_months
 openingRows = ix.openings.map((o) => ({ id: o.id, eco: o.eco, name: o.name, moves: ix.pgn(o.moves), line: o.moves, plies: o.moves.length, rank: o.rank }))
 ITALIAN = ["e4", "e5", "Nf3", "Nc6", "Bc4"]
 // Shareable state in the URL hash:
-//   #moves=e4,e5,Nf3&speeds=Blitz,Rapid&bands=1600,1800&from=2019-01&to=2021-12&smooth=3&metric=results&view=levels
+//   #moves=e4,e5,Nf3&speeds=Blitz,Rapid&bands=1600,1800&from=2019-01&to=2021-12&smooth=3&metric=results&zoom=score&view=levels
 //   (from= defaults to 2017-01 and to= to the latest month; both are written only when they differ;
-//   metric=results opens panel 1 on Win percentage and is written only then: Popularity is the default)
+//   metric=results opens panel 1 on Win percentage and is written only then: Popularity is the default;
+//   zoom=score opens Win percentage on "Score only (zoomed)", is written only then, and is ignored without metric=results)
 // (#opening=<id> from v1 links still works: it sets the board to that line)
 hashParams = new URLSearchParams(location.hash.slice(1))
 hashList = (k) => hashParams.has(k) ? hashParams.get(k).split(",").filter(Boolean) : null
@@ -230,7 +231,9 @@ rows = res.cnt ? d3.range(m0, m1 + 1).map((m, j) => {
   const r = { m, date: monthDate(ix, m), label: monthLabel(ix, m) };
   for (const k of ["W", "B", "WxB", "reach", "gap", "E_white", "E_black", "edge_white", "edge_black",
                    "edge_white_reach", "edge_black_reach", "W_lo", "W_hi", "B_lo", "B_hi", "reach_lo", "reach_hi",
-                   "win_w", "win_d", "win_b", "score", "score_lo", "score_hi", "res_n"])
+                   "win_w", "win_d", "win_b", "score", "score_lo", "score_hi", "res_n",
+                   "spec_edge_white", "spec_edge_black", "spec_edge_white_lo", "spec_edge_white_hi",
+                   "spec_edge_black_lo", "spec_edge_black_hi"])
     r[k] = Number.isFinite(s[k][m]) ? s[k][m] : NaN;
   r.c_W = a.c_W[j]; r.c_B = a.c_B[j]; r.c_total = a.c_total[j];
   return r;
@@ -258,7 +261,8 @@ logTicks = (vals) => {
   return out.length >= 2 ? out : undefined;
 }
 oneIn = (p) => !Number.isFinite(p) || p <= 0 ? "—" : p >= 0.5 ? `1 in ${(1 / p).toFixed(1)}` : `1 in ${d3.format(",")(Math.round(1 / p))}`
-times = (x) => !Number.isFinite(x) ? "—" : x >= 10 ? `${d3.format(",")(Math.round(x))}×` : `${x.toFixed(1)}×`
+// the specialist edge, two decimals below 10 (1.87×, 0.53×)
+times2 = (x) => !Number.isFinite(x) ? "—" : x >= 10 ? `${d3.format(",")(Math.round(x))}×` : `${x.toFixed(2)}×`
 key = (color, kind = "solid") => `<span class="dash-key ${kind}" style="border-color:${color};${kind === "box" ? `background:${color}` : ""}"></span>`
 esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c])
 D = (s) => { const d = document.createElement("div"); d.innerHTML = s; return d; }
@@ -274,6 +278,7 @@ lineText = (moves) => moves.length ? ix.pgn(moves) : "the start position"
   if (m1 !== M - 1) p.set("to", monthLabel(ix, m1));
   if (smooth === 3) p.set("smooth", "3");
   if (metric1 === "Win percentage") p.set("metric", "results");
+  if (zoom1) p.set("zoom", "score");
   if (view2 === "Levels") p.set("view", "levels");
   history.replaceState(null, "", "#" + p.toString().replace(/%2C/g, ","));
 }
@@ -348,6 +353,11 @@ viewof metric1 = Inputs.radio(["Popularity", "Win percentage"], { label: "Metric
 ```
 
 ```{ojs}
+viewof show1 = Inputs.radio(["All results", "Score only (zoomed)"], { label: "Show",
+  value: hashParams.get("metric") === "results" && hashParams.get("zoom") === "score" ? "Score only (zoomed)" : "All results" })
+```
+
+```{ojs}
 viewof scale1 = Inputs.radio(["log", "linear"], { label: "Scale", value: "log" })
 ```
 :::
@@ -358,6 +368,14 @@ results1 = metric1 === "Win percentage"
 // Win percentage has a linear axis only: the Scale choice is hidden (it is kept,
 // and panel 2's Levels chart still follows it)
 { viewof scale1.style.display = results1 ? "none" : ""; }
+// the Show choice (all results | the score alone, zoomed) exists only under Win percentage;
+// its whole cell is hidden, so the radio row's gap does not open up under Popularity
+{
+  viewof show1.style.display = results1 ? "" : "none";
+  const cell = viewof show1.closest(".dash-radios > .cell");
+  if (cell) cell.style.display = results1 ? "" : "none";
+}
+zoom1 = results1 && show1 === "Score only (zoomed)"
 // results ship only at the named openings' final positions
 hasResults = !!(res.cnt && res.ser.hasResults)
 COL_DRAW = "#8f8d86"   // COL.draw darkened so a thin line holds up on white
@@ -371,7 +389,11 @@ RESULTS_FOOT = "Results of games reaching this position by any move order; score
   <span>${key(COL.reach)} True reach: any move order</span>
   <span>${key(COL.prod, "dashed")} W×B: this move order only</span>
   <span>${key(COL.reach, "box").replace("background:", "opacity:.25;background:")} 95% interval</span></div>`)
-: !hasResults ? html`` : D(`<div class="dash-legend">
+: !hasResults ? html``
+: zoom1 ? D(`<div class="dash-legend">
+  <span>${key(COL.ink, "thick")} Average score (White's view)</span>
+  <span>${key(COL.ink, "box").replace("background:", "opacity:.18;background:")} 95% interval on the score</span></div>`)
+: D(`<div class="dash-legend">
   <span>${key(COL.white)} White wins</span><span>${key(COL_DRAW)} Draws</span><span>${key(COL.black)} Black wins</span>
   <span>${key(COL.ink, "thick")} Average score (White's view)</span>
   <span>${key(COL.ink, "box").replace("background:", "opacity:.18;background:")} 95% interval on the score</span></div>`)
@@ -418,6 +440,50 @@ chart1r = (w, h, P) => { const L = plotLayout(P, h, w, { hDefault: 300, mlBanner
 ```
 
 ```{ojs}
+//| output: false
+// Win percentage, score only: the average score and its 95% band on an axis fitted to the
+// window (score_lo..score_hi, suppressed months ignored) with 10% padding each side, at least
+// 0.04 wide so a very stable opening is not zoomed into noise, and never outside [0, 1].
+zoomDomain = {
+  const v = rows.flatMap((d) => [d.score_lo, d.score_hi]).filter(Number.isFinite);
+  const lo = v.length ? d3.min(v) : 0.5, hi = v.length ? d3.max(v) : 0.5, padY = 0.1 * (hi - lo);
+  let a = lo - padY, b = hi + padY;
+  if (b - a < 0.04) { const mid = (lo + hi) / 2; a = mid - 0.02; b = mid + 0.02; }
+  if (a < 0) { b = Math.min(1, b - a); a = 0; }
+  if (b > 1) { a = Math.max(0, a - (b - 1)); b = 1; }
+  return [a, b];
+}
+// ticks on whole hundredths (two decimals, as the summary's "average score 0.522"):
+// the finest of 0.01 / 0.02 / 0.05 / 0.1 / 0.2 that gives at most k ticks
+zoomTicks = (k) => {
+  const [a, b] = zoomDomain;
+  for (const st of [0.01, 0.02, 0.05, 0.1, 0.2]) {
+    const t = d3.range(Math.ceil(a / st - 1e-9), Math.floor(b / st + 1e-9) + 1).map((i) => +(i * st).toFixed(2));
+    if (t.length <= k || st === 0.2) return t;
+  }
+}
+chart1z = (w, h, P) => { const L = plotLayout(P, h, w, { hDefault: 300, mlBanner: 68, mlK: 3.6 }); return Plot.plot({
+  width: w, ...L,
+  x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)], ...xTicks(P, w, L.marginLeft) },
+  y: { type: "linear", label: "average score (White's view)", domain: zoomDomain, grid: true,
+       ticks: zoomTicks(Math.min(6, yMax(P, L))), tickFormat: d3.format(".2f") },
+  marks: [
+    ...(zoomDomain[0] <= 0.5 && 0.5 <= zoomDomain[1] ? [
+      Plot.ruleY([0.5], { stroke: COL.muted, strokeWidth: 1, strokeDasharray: "4,3", ariaLabel: () => "even-rule" }),
+      Plot.text([0.5], { y: (d) => d, text: () => "even", frameAnchor: "right", textAnchor: "end", lineAnchor: "bottom", dy: -3,
+        fill: COL.prod, ariaLabel: () => "even-label" })] : []),
+    Plot.areaY(rows, { x: "date", y1: "score_lo", y2: "score_hi", fill: COL.ink, fillOpacity: 0.18, curve: "monotone-x" }),
+    Plot.lineY(rows, { x: "date", y: "score", stroke: COL.ink, strokeWidth: 2.75, curve: "monotone-x" }),
+    Plot.ruleX(rows, Plot.pointerX({ x: "date", stroke: COL.muted, strokeWidth: 1 })),
+    Plot.tip(rows, Plot.pointerX({ x: "date", y: "score",
+      title: (d) => `${d.label}
+Score  ${sc(d.score)}  (${sc(d.score_lo)}–${sc(d.score_hi)})
+${games(d.res_n)} games` })),
+  ],
+}) }
+```
+
+```{ojs}
 {
   if (!results1)
     return chartWithDownload(chart1(Math.max(240, Math.min(width, 1100))), () => exportSpec("How popular is it?", "popularity",
@@ -434,6 +500,11 @@ chart1r = (w, h, P) => { const L = plotLayout(P, h, w, { hDefault: 300, mlBanner
     b.title = "Nothing to download: monthly results are available for the named openings' final positions";
     return box;
   }
+  if (zoom1)
+    return chartWithDownload(chart1z(Math.max(240, Math.min(width, 1100))), () => exportSpec("How does it score? (score only)", "results-score",
+      (w, h, P) => chart1z(w, h, P), [
+        { label: "Average score (White's view)", color: COL.ink, kind: "line" },
+        { label: "95% interval on the score", color: COL.ink, kind: "area" }], RESULTS_FOOT));
   return chartWithDownload(chart1r(Math.max(240, Math.min(width, 1100))), () => exportSpec("How does it score?", "results",
     (w, h, P) => chart1r(w, h, P), [
       { label: "White wins", color: COL.white, kind: "line" },
@@ -558,22 +629,24 @@ viewof persp = Inputs.select(["White", "Black", "Both sides"], { label: "Perspec
 ```{ojs}
 {
   const P = persp;
-  const tile = (k, v, s, color) => `<div class="dash-tile"><div class="k">${color ? key(color) : ""}${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
-  const typical = tile("Typical opponent meets it", oneIn(win.WxB), `along this move order; ${oneIn(win.reach)} by any order`, COL.prod);
+  const tile = (k, v, s, color, cls = "") => `<div class="dash-tile${cls}"><div class="k">${color ? key(color) : ""}${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
   let tiles;
   if (P === "Both sides") {
+    const r = win.spec_edge_white;   // B ÷ W: > 1 favours White, < 1 favours Black
+    const fav = !Number.isFinite(r) ? "—" : r > 1 ? `favours White ${times2(r)}` : r < 1 ? `favours Black ${times2(win.spec_edge_black)}` : "even (1.00×)";
     tiles = [
-      tile("A White specialist gets it", oneIn(win.E_white), `E<sub>White</sub> = B: Black's moves decide · edge ${times(win.edge_white)}`, COL.white),
-      tile("A Black specialist gets it", oneIn(win.E_black), `E<sub>Black</sub> = W: White's moves decide · edge ${times(win.edge_black)}`, COL.black),
-      typical,
+      tile("A White specialist gets it", oneIn(win.E_white), `E<sub>White</sub> = B: Black's moves decide`, COL.white),
+      tile("A Black specialist gets it", oneIn(win.E_black), `E<sub>Black</sub> = W: White's moves decide`, COL.black),
+      tile("Specialist edge", fav, `E<sub>White</sub> ÷ E<sub>Black</sub> = B ÷ W = ${times2(r)}: how many times more often a White specialist reaches this than a Black one`, null, " dash-spec"),
     ];
   } else {
-    const w = P === "White";
-    const Eyou = w ? win.E_white : win.E_black, edge = w ? win.edge_white : win.edge_black, edgeR = w ? win.edge_white_reach : win.edge_black_reach;
+    const w = P === "White", O = w ? "Black" : "White";
+    const Eyou = w ? win.E_white : win.E_black, Eopp = w ? win.E_black : win.E_white;
+    const spec = w ? win.spec_edge_white : win.spec_edge_black;
     tiles = [
       tile(`You (always play ${P}'s moves)`, oneIn(Eyou), `E<sub>${P}</sub> = ${w ? "B" : "W"}: your opponent's moves decide`, w ? COL.white : COL.black),
-      typical,
-      tile("Your familiarity edge", times(edge), `E<sub>you</sub> ÷ (W×B) = 1 ÷ ${w ? "W" : "B"} · vs true reach ${times(edgeR)}`),
+      tile(`Your opponent (a ${O} specialist) gets it`, oneIn(Eopp), `E<sub>${O}</sub> = ${w ? "W" : "B"}: ${P}'s moves decide`, w ? COL.black : COL.white),
+      tile("Specialist edge", times2(spec), `E<sub>you</sub> ÷ E<sub>opponent</sub> = ${w ? "B ÷ W" : "W ÷ B"}: how many times more often you reach this than an opponent who specialises in ${O}`, null, " dash-spec"),
     ];
   }
   return D(`<div class="dash-tiles">${tiles.join("")}</div>`);
@@ -584,7 +657,18 @@ viewof persp = Inputs.select(["White", "Black", "Both sides"], { label: "Perspec
 //| output: false
 series3 = persp === "Both sides"
   ? [{ k: "E_white", name: "White specialist", color: COL.white }, { k: "E_black", name: "Black specialist", color: COL.black }]
-  : [{ k: persp === "White" ? "E_white" : "E_black", name: `You (${persp})`, color: persp === "White" ? COL.white : COL.black }]
+  : persp === "White"
+    ? [{ k: "E_white", name: "You (White)", color: COL.white }, { k: "E_black", name: "Your opponent (Black specialist)", color: COL.black }]
+    : [{ k: "E_black", name: "You (Black)", color: COL.black }, { k: "E_white", name: "Your opponent (White specialist)", color: COL.white }]
+```
+
+```{ojs}
+//| output: false
+// the specialist edge in a tooltip line: E_you ÷ E_opponent, or its direction under "Both sides"
+specLine3 = (d) => persp === "White" ? `Specialist edge  ${times2(d.spec_edge_white)}`
+  : persp === "Black" ? `Specialist edge  ${times2(d.spec_edge_black)}`
+  : !Number.isFinite(d.spec_edge_white) ? "Specialist edge  —"
+  : d.spec_edge_white >= 1 ? `Favours White  ${times2(d.spec_edge_white)}` : `Favours Black  ${times2(d.spec_edge_black)}`
 ```
 
 ```{ojs}
@@ -596,14 +680,12 @@ chart3 = (w, h, P) => {
     width: w, ...L,
     x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)], ...xTicks(P, w, L.marginLeft) },
     y: { type: "log", label: "once every … games", grid: true, tickFormat: (d) => `1 in ${d3.format("~s")(d)}`,
-         ticks: thin(logTicks(rows.flatMap((d) => [...series3.map((s) => inv(d[s.k])), inv(d.WxB), inv(d.reach)])), yMax(P, L)) },
+         ticks: thin(logTicks(rows.flatMap((d) => series3.map((s) => inv(d[s.k])))), yMax(P, L)) },
     marks: [
-      ...series3.map((s) => Plot.lineY(rows, { x: "date", y: (d) => inv(d[s.k]), stroke: s.color, strokeWidth: 2, curve: "monotone-x" })),
-      Plot.lineY(rows, { x: "date", y: (d) => inv(d.WxB), stroke: COL.prod, strokeWidth: 2, strokeDasharray: "5,4", curve: "monotone-x" }),
-      Plot.lineY(rows, { x: "date", y: (d) => inv(d.reach), stroke: COL.reach, strokeWidth: 1.5, curve: "monotone-x" }),
+      ...series3.map((s) => Plot.lineY(rows, { x: "date", y: (d) => inv(d[s.k]), stroke: s.color, strokeWidth: 2.25, curve: "monotone-x" })),
       Plot.ruleX(rows, Plot.pointerX({ x: "date", stroke: COL.muted, strokeWidth: 1 })),
-      Plot.tip(rows, Plot.pointerX({ x: "date", y: (d) => inv(d.WxB),
-        title: (d) => [d.label, ...series3.map((s) => `${s.name}  ${oneIn(d[s.k])}`), `Typical (W×B)  ${oneIn(d.WxB)}`, `Typical (reach)  ${oneIn(d.reach)}`].join("\n") })),
+      Plot.tip(rows, Plot.pointerX({ x: "date", y: (d) => inv(d[series3[0].k]),
+        title: (d) => [d.label, ...series3.map((s) => `${s.name}  ${oneIn(d[s.k])}`), specLine3(d)].join("\n") })),
     ],
   });
 }
@@ -611,13 +693,13 @@ chart3 = (w, h, P) => {
 
 ```{ojs}
 {
-  const legend3 = [...series3.map((s) => ({ label: s.name, color: s.color, kind: "line" })),
-    { label: "Typical opponent (W×B)", color: COL.prod, kind: "dashed" },
-    { label: "Typical, any move order (reach)", color: COL.reach, kind: "line" }];
+  const legend3 = series3.map((s) => ({ label: s.name, color: s.color, kind: "line" }));
   const legend = legend3.map((l) => `<span>${key(l.color, l.kind === "dashed" ? "dashed" : "solid")} ${l.name ?? l.label}</span>`).join("");
-  const panel = persp === "Both sides" ? "White and Black specialists vs a typical opponent" : `You (${persp}) vs your opponent`;
-  const box = chartWithDownload(chart3(Math.max(240, Math.min(width, 1100))), () => exportSpec(panel, "you-vs-opponent", (w, h, P) => chart3(w, h, P), legend3));
-  return html`${D(`<div class="dash-legend">${legend}</div>`)}${box}<div class="dash-note">${popNote}</div>`;
+  const panel = persp === "Both sides" ? "White specialist vs Black specialist" : `You (${persp}) vs a ${persp === "White" ? "Black" : "White"} specialist`;
+  const box = chartWithDownload(chart3(Math.max(240, Math.min(width, 1100))), () => exportSpec(panel, "you-vs-opponent", (w, h, P) => chart3(w, h, P), legend3,
+    "A specialist always plays one side's moves of the line, so meets it when the other side cooperates (White: B, Black: W). On the log scale the gap between the two lines is the specialist edge."));
+  return html`${D(`<div class="dash-legend">${legend}</div>`)}${box}
+  <p class="dash-sub">On the log scale, the gap between the two lines is the specialist edge: how many times more often one side reaches this than the other.</p><div class="dash-note">${popNote}</div>`;
 }
 ```
 
@@ -657,9 +739,9 @@ chart3 = (w, h, P) => {
 
 ```{ojs}
 Inputs.table(rows.map((d) => ({ month: d.label, W: d.W, B: d.B, "W×B": d.WxB, reach: d.reach, gap: d.gap,
-  "edge (White)": d.edge_white, "edge (Black)": d.edge_black })), {
+  "specialist edge (White = B÷W)": d.spec_edge_white })), {
   format: { W: (x) => pct(x), B: (x) => pct(x), "W×B": (x) => pct(x), reach: (x) => pct(x), gap: (x) => pct(x, 0),
-            "edge (White)": times, "edge (Black)": times }, rows: 12 })
+            "specialist edge (White = B÷W)": times2 }, rows: 12 })
 ```
 </details>
 

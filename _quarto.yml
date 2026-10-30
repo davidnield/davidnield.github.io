@@ -27,6 +27,8 @@ website:
         href: blog.qmd
       - text: Openings
         href: openings/index.qmd
+      - text: Ratings
+        href: ratings/index.qmd
       - text: Resume
         href: files/resume.pdf
 

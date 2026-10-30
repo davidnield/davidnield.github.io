@@ -1,0 +1,300 @@
+---
+title: "What is your rating worth?"
+subtitle: "Lichess ratings converted between categories and time controls, from players active in both at the same time, and how busy each queue is"
+# Self-contained page options, as on the Openings page. Every script, the stylesheet and every
+# data file is loaded with ?v=9a4559d61847, a content hash of the release stamped by
+# python/build_site.py, so a deploy never mixes with a browser's cached copy of the last one.
+format:
+  html:
+    include-in-header:
+      text: '<meta name="rc-version" content="9a4559d61847"><link rel="stylesheet" href="rc.css?v=9a4559d61847">'
+    toc: false
+    page-layout: full
+    anchor-sections: false
+resources:
+  - rc.css
+  - rc-core.js
+  - rc-runtime.js
+  - rc-tabs.js
+  - rc-q1.js
+  - rc-q2.js
+  - rc-q3.js
+  - data/*.csv
+  - data/q1/*.csv
+  - data/q1_grid/*.csv
+---
+
+```{=html}
+<div class="rc">
+
+  <nav class="rc-tabs" role="tablist" aria-label="Report sections">
+    <button type="button" role="tab" data-tab="convert" aria-selected="true">Between categories</button>
+    <button type="button" role="tab" data-tab="timecontrols" aria-selected="false">Within a category</button>
+    <button type="button" role="tab" data-tab="queues" aria-selected="false">Queue sizes</button>
+    <button type="button" role="tab" data-tab="method" aria-selected="false">Method</button>
+  </nav>
+
+  <!-- ============ Q1 ============ -->
+  <section class="rc-page" id="convert">
+    <div class="rc-controls">
+      <label class="rc-field">Known rating in
+        <select class="rc-from" id="q1-from">
+          <option>UltraBullet</option><option>Bullet</option><option>Blitz</option><option>Rapid</option><option>Classical</option><option>Correspondence</option><option>Classical (pre-Nov 2017)</option>
+        </select>
+      </label>
+      <button type="button" class="rc-swap" id="q1-swap" aria-label="Swap the two categories">⇄</button>
+      <label class="rc-field">Convert to
+        <select class="rc-to" id="q1-to">
+          <option>UltraBullet</option><option>Bullet</option><option>Blitz</option><option>Rapid</option><option>Classical</option><option>Correspondence</option><option>Classical (pre-Nov 2017)</option>
+        </select>
+      </label>
+      <div class="rc-field">
+        <label for="q1-month">Month</label>
+        <span class="rc-rating">
+          <input type="range" id="q1-month" data-draw="q1-month" min="0" max="0" step="1">
+          <output for="q1-month" class="rc-month-label" data-draw="q1-month-label">—</output>
+        </span>
+      </div>
+      <div class="rc-field">
+        <label for="q1-rating">Rating</label>
+        <span class="rc-rating">
+          <input type="range" class="rc-rating-range" id="q1-rating-range" min="400" max="3000" step="25" aria-label="Rating slider">
+          <input type="number" class="rc-rating-num" id="q1-rating" min="400" max="3000" step="25">
+        </span>
+      </div>
+    </div>
+
+    <div class="rc-card rc-answer" id="q1-answer">
+      <div class="rc-answer-main">
+        <span class="rc-eyebrow"><span data-draw="p-from">—</span> <span data-draw="p-rating">—</span> → <span data-draw="p-to">—</span>, <span data-draw="p-month">—</span></span>
+        <span class="rc-big" data-draw="c-val" data-field="mean">—</span>
+        <p class="rc-sub">Average <span data-draw="p-to">—</span> rating of players rated <span data-draw="p-rating">—</span> in <span data-draw="p-from">—</span> who were playing both at the time.</p>
+      </div>
+      <dl class="rc-stats">
+        <div><dt>95% interval of the average</dt><dd><span data-draw="c-val" data-field="lo95">—</span>–<span data-draw="c-val" data-field="hi95">—</span></dd></div>
+        <div><dt>Middle half of players</dt><dd><span data-draw="c-val" data-field="q25">—</span>–<span data-draw="c-val" data-field="q75">—</span></dd></div>
+        <div><dt>Middle 80% of players</dt><dd><span data-draw="c-val" data-field="q10">—</span>–<span data-draw="c-val" data-field="q90">—</span></dd></div>
+        <div><dt>Same-percentile rating (<span data-draw="p-year">—</span>)</dt><dd><span data-draw="c-val" data-field="equi">—</span> <span class="rc-note">(percentile <span data-draw="c-val" data-field="pct">—</span>)</span></dd></div>
+        <div><dt>Player-months behind this figure</dt><dd><span data-draw="c-val" data-field="n">—</span></dd></div>
+        <div><dt>Smoothing window</dt><dd><span data-draw="c-val" data-field="window">—</span></dd></div>
+      </dl>
+      <p class="rc-warn rc-q1-rough" hidden>Rough figure: few players hold both ratings at this level, so the 95% interval is wider than ±16 points.</p>
+      <p class="rc-warn rc-q1-thin" hidden>Too few players held both ratings near this level in this month for a reliable figure. Try a rating nearer the middle of the curve, or another month.</p>
+      <span data-draw="q1-msg"></span>
+    </div>
+
+    <div class="rc-grid">
+      <div class="rc-card rc-wide" id="q1-curve-card">
+        <h2>The whole conversion curve</h2>
+        <p class="rc-note">Average <span data-draw="p-to">—</span> rating at each <span data-draw="p-from">—</span> rating in <span data-draw="p-month">—</span>, with the spread of individual players around it. The curve is smoothed across neighbouring ratings and months, more widely where few players hold both ratings, and stops where it would be less precise than about ±30 points. The line is dashed where the average is rough, with a 95% interval wider than ±16. Click the chart to pick a rating. The average regresses toward the middle, so converting back the other way does not return the rating you started with; the same-percentile line is the symmetric alternative.</p>
+        <ul class="rc-legend">
+          <li><span class="rc-sw rc-sw-line" data-swatch="to"></span>Average</li>
+          <li><span class="rc-sw" data-swatch="to" style="opacity:.45"></span>Middle half of players</li>
+          <li><span class="rc-sw" data-swatch="to" style="opacity:.2"></span>Middle 80%</li>
+          <li><span class="rc-sw rc-sw-dash" data-swatch-color="to"></span>Rough average (interval wider than ±16)</li>
+          <li><span class="rc-sw rc-sw-dash" style="color: var(--color-fg-muted)"></span>Same percentile</li>
+          <li><span class="rc-sw rc-sw-dash" style="color: var(--cds-chart-reference)"></span>Equal ratings</li>
+        </ul>
+        <div class="rc-chart rc-chart-tall dash-skeleton" id="q1-curve" data-draw="q1-curve"></div>
+      </div>
+
+      <div class="rc-card" id="q1-trend-card">
+        <h3>Drift at <span data-draw="p-rating">—</span>, month by month</h3>
+        <p class="rc-note">Average <span data-draw="p-to">—</span> rating of <span data-draw="p-from">—</span> <span data-draw="p-rating">—</span> players each month, with its 95% interval. The pools drift as players join and leave, so a conversion is only good for its own time. Click to pick a month.</p>
+        <div class="rc-chart dash-skeleton" id="q1-trend" data-draw="q1-trend"></div>
+      </div>
+
+      <div class="rc-card" id="q1-sens-card">
+        <h3>Does the method change the answer?</h3>
+        <p class="rc-note">The same conversion at <span data-draw="p-rating100">—</span> for the whole of <span data-draw="p-year">—</span> under other filtering and weighting choices, each with its 95% interval.</p>
+        <div class="rc-chart dash-skeleton" id="q1-sens" data-draw="q1-sens"></div>
+      </div>
+
+      <div class="rc-card rc-wide" id="q1-grid-card">
+        <h3>Lookup table for <span data-draw="p-from">—</span>, <span data-draw="p-month">—</span></h3>
+        <p class="rc-note">Average rating in each other category for players at each <span data-draw="p-from">—</span> rating. Values in grey italics are rough (95% interval wider than ±16 points); blank where it would be wider than ±30. Click a row to select that rating.</p>
+        <div class="rc-table-box">
+          <table class="rc-table" id="q1-grid">
+            <thead><tr>
+              <th data-field="rating" scope="col">Rating</th>
+              <th data-field="UltraBullet" scope="col">UltraBullet</th>
+              <th data-field="Bullet" scope="col">Bullet</th>
+              <th data-field="Blitz" scope="col">Blitz</th>
+              <th data-field="Rapid" scope="col">Rapid</th>
+              <th data-field="Classical" scope="col">Classical</th>
+              <th data-field="Correspondence" scope="col">Correspondence</th>
+              <th data-field="Classical (pre-Nov 2017)" scope="col">Classical (pre-Nov 2017)</th>
+            </tr></thead>
+            <tbody data-draw="q1-grid"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Q2 ============ -->
+  <section class="rc-page" id="timecontrols" hidden>
+    <div class="rc-controls">
+      <label class="rc-field">Category
+        <select class="rc-q2group" id="q2-group">
+          <option>Bullet</option><option>Blitz</option><option>Rapid</option><option>Classical</option><option>Classical (pre-Nov 2017)</option>
+        </select>
+      </label>
+      <label class="rc-field">You play
+        <select id="q2-tc" data-draw="q2-tc"></select>
+      </label>
+      <label class="rc-field">Year
+        <select id="q2-year" data-draw="q2-year"></select>
+      </label>
+      <div class="rc-field">
+        <label for="q2-rating">Your rating</label>
+        <span class="rc-rating">
+          <input type="range" class="rc-q2rating-range" id="q2-rating-range" min="400" max="3000" step="25" aria-label="Rating slider">
+          <input type="number" class="rc-q2rating-num" id="q2-rating" min="400" max="3000" step="25">
+        </span>
+      </div>
+    </div>
+
+    <div class="rc-card rc-q2-answer" id="q2-answer">
+      <span class="rc-eyebrow"><span data-draw="q2-word" data-word="group">—</span> <span data-draw="q2-word" data-word="tc">—</span> · <span data-draw="q2-word" data-word="rating">—</span> · <span data-draw="q2-word" data-word="year">—</span></span>
+      <p class="rc-lead">If every <span data-draw="q2-word" data-word="group">—</span> time control had its own rating, a <span data-draw="q2-word" data-word="tc">—</span> player rated <span data-draw="q2-word" data-word="rating">—</span> would be rated about:</p>
+      <div class="rc-tiles" data-draw="q2-tiles"></div>
+      <p class="rc-note">Higher means that queue is easier: at the same rating, the players you meet there are weaker. These figures are for someone who plays both about equally. If you mostly play one time control you will do better in it than this suggests, and worse in the others.</p>
+      <p class="rc-warn rc-q2-all" hidden>Too few players near this rating play both, so these figures use players of all ratings.</p>
+      <span data-draw="q2-msg"></span>
+    </div>
+
+    <div class="rc-grid">
+      <div class="rc-card" id="q2-rating-card">
+        <h2>The gap depends on your rating</h2>
+        <p class="rc-note">How many points higher (above the line) or lower (below it) a <span data-draw="q2-word" data-word="tc">—</span> player would be rated in each other time control, at each <span data-draw="q2-word" data-word="tc">—</span> rating, in <span data-draw="q2-word" data-word="year">—</span>. Shaded bands are 95% intervals. Click to pick a rating.</p>
+        <div class="rc-chart dash-skeleton" id="q2-rating-chart" data-draw="q2-by-rating"></div>
+      </div>
+
+      <div class="rc-card" id="q2-trend-card">
+        <h2>Has it changed over the years?</h2>
+        <p class="rc-note">The same gaps each year, for <span data-draw="q2-word" data-word="tc">—</span> players rated <span data-draw="q2-word" data-word="trendband">—</span>. Click to pick a year.</p>
+        <div class="rc-chart dash-skeleton" id="q2-trend-chart" data-draw="q2-trend"></div>
+      </div>
+
+      <div class="rc-card rc-wide" id="q2-how">
+        <h2>How this is measured</h2>
+        <ol class="rc-steps">
+          <li>All time controls in a category share one rating, so there is no second rating to compare. Instead the report takes players who played both time controls in the same month.</li>
+          <li>In each time control, it compares how they actually scored with what their own and their opponents' ratings predicted, and turns the difference into rating points.</li>
+          <li>People do better in whichever time control they play most. To cancel that out, it averages the players who mostly play one with those who mostly play the other. What is left is how much tougher one queue is than the other at the same rating.</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ Q3 ============ -->
+  <section class="rc-page" id="queues" hidden>
+    <div class="rc-grid">
+      <div class="rc-card rc-wide" id="q3-share-card">
+        <h2>Share of lobby games by category</h2>
+        <p class="rc-note">Each month's rated lobby games split by category. Rapid arrived in November 2017, taking the 8 to 25 minute games from the old Classical.</p>
+        <ul class="rc-legend">
+          <li><span class="rc-sw" data-swatch="cat:UltraBullet"></span>UltraBullet</li>
+          <li><span class="rc-sw" data-swatch="cat:Bullet"></span>Bullet</li>
+          <li><span class="rc-sw" data-swatch="cat:Blitz"></span>Blitz</li>
+          <li><span class="rc-sw" data-swatch="cat:Rapid"></span>Rapid</li>
+          <li><span class="rc-sw" data-swatch="cat:Classical (pre-Nov 2017)"></span>Classical (pre-Nov 2017)</li>
+          <li><span class="rc-sw" data-swatch="cat:Classical"></span>Classical</li>
+          <li><span class="rc-sw" data-swatch="cat:Correspondence"></span>Correspondence</li>
+        </ul>
+        <div class="rc-chart dash-skeleton" id="q3-share" data-draw="q3-share"></div>
+      </div>
+    </div>
+
+    <div class="rc-controls">
+      <label class="rc-field">Category
+        <select class="rc-q3group" id="q3-group">
+          <option>UltraBullet</option><option>Bullet</option><option>Blitz</option><option>Rapid</option><option>Classical</option><option>Classical (pre-Nov 2017)</option><option>Correspondence</option>
+        </select>
+      </label>
+    </div>
+    <div class="rc-card" id="q3-monthly-card">
+      <h2>Games per day in each <span data-draw="q3-word" data-word="group">—</span> time control</h2>
+      <p class="rc-note">Average rated lobby games started per day, by month: a stand-in for how many people are in each queue. "other" is every remaining time control in the category.</p>
+      <div class="rc-chart rc-chart-tall dash-skeleton" id="q3-monthly" data-draw="q3-monthly"></div>
+    </div>
+
+    <div class="rc-controls">
+      <label class="rc-field">Year
+        <select id="q3-year" data-draw="q3-year"></select>
+      </label>
+    </div>
+    <div class="rc-card" id="q3-heat-card">
+      <h2>When the queues are busy, <span data-draw="q3-year-word">—</span></h2>
+      <p class="rc-note">Games started in each hour of the day (UTC), shaded relative to each time control's own busiest hour. The right-hand column is busiest hour ÷ quietest hour: the bigger it is, the more your wait depends on when you play.</p>
+      <div class="rc-chart dash-skeleton" id="q3-heat" data-draw="q3-heat"></div>
+    </div>
+
+    <div class="rc-card" id="q3-band-card">
+      <h2>Games near your rating, by hour</h2>
+      <div class="rc-controls">
+        <label class="rc-field">Time control
+          <select id="q3-tc" data-draw="q3-tc"></select>
+        </label>
+        <label class="rc-field">Rating band (average of the two players)
+          <input type="number" class="rc-q3band" id="q3-band" min="400" max="3000" step="100">
+        </label>
+      </div>
+      <p class="rc-note">Games per hour in <span data-draw="q3-band-stat" data-stat="peak" data-field="year">—</span> where the two players averaged <span data-draw="q3-word" data-word="band">—</span>. Busiest at <b data-draw="q3-band-stat" data-stat="peak" data-field="hour">—</b>:00 UTC with <b data-draw="q3-band-stat" data-stat="peak" data-field="games_per_hour">—</b> games an hour; quietest at <b data-draw="q3-band-stat" data-stat="low" data-field="hour">—</b>:00 UTC with <b data-draw="q3-band-stat" data-stat="low" data-field="games_per_hour">—</b>.</p>
+      <div class="rc-chart dash-skeleton" id="q3-band-chart" data-draw="q3-band"></div>
+    </div>
+  </section>
+
+  <!-- ============ Method ============ -->
+  <section class="rc-page" id="method" hidden>
+    <div class="rc-prose">
+      <h2>The data</h2>
+      <p>Every rated lobby game (the "Rated Bullet game", "Rated Blitz game" and similar events) in the Lichess standard-chess open database from <span data-draw="corpus" data-field="first">—</span> to <span data-draw="corpus" data-field="last">—</span>: <b data-draw="corpus" data-field="games">—</b> games once bot games are removed. Tournament games are not in this copy of the data, which suits the queue-size measure. The 2026 figures cover January to September only.</p>
+      <p>Lichess places a game in a category by its estimated duration, base time plus 40 times the increment: under 30 seconds is UltraBullet (here only ¼+0), under 3 minutes Bullet, under 8 Blitz, under 25 Rapid, and the rest Classical. Each category has one Glicko-2 rating shared by all its time controls. Rapid did not exist before November 2017, when Classical covered everything from 8 minutes up, so the old Classical pool is shown on its own as "Classical (pre-Nov 2017)". New Rapid ratings were seeded from Classical at the split.</p>
+
+      <h2>Between categories</h2>
+      <ul>
+        <li><b>Only contemporaneous play counts.</b> A pair of ratings is recorded at a moment when both were current: the player had just played in one category and had played in the other within the last 30 days.</li>
+        <li><b>No provisional ratings.</b> Rating deviation is not in the data, so it is worked out from each game's rating change. Both ratings must be established (deviation 75 or less, where Lichess shows a rating as rankable) and the player must have at least 20 games in each category.</li>
+        <li><b>Frequent dual players count most.</b> Each player-month gets a weight equal to the smaller of their game counts in the two categories that month, capped at 30, so someone who plays both every day counts far more than someone who dabbles, without letting a handful of accounts dominate.</li>
+        <li><b>Drift is handled month by month.</b> Every figure belongs to one month and borrows only from the months around it, so a conversion always describes the pools as they were at that time.</li>
+        <li><b>Two kinds of answer.</b> The average is the expected rating in the other category for people at your rating. Because nobody's two ratings move in lockstep, it regresses toward the middle, so A to B and B to A are not inverses. The same-percentile rating matches ranks among the dual players instead, and is symmetric.</li>
+        <li><b>Smoothing.</b> Each figure is a weighted fit through the player-months nearby in both rating and time: a local-linear smoother (the core of loess) with weights falling off smoothly with distance in rating points and in months, and a linear trend in time so the latest months are not dragged toward the past. The window is ±25 rating points and ±2.5 months where data is dense, and widens step by step to at most ±150 points and ±13 months until about 1,500 player-months are inside it, so busy pairs keep near-monthly detail and rare ones borrow from their neighbours. The spread of players comes from the same window after moving each neighbour along the fitted slope. The same-percentile rating and the method comparison are yearly.</li>
+        <li><b>Intervals.</b> 95% intervals come from a jackknife over 16 groups of players. The middle half and middle 80% describe how individual players spread around the average.</li>
+      </ul>
+
+      <h2>Within a category</h2>
+      <ul>
+        <li>Time controls in one category move the same rating, so there are no two ratings to compare. Instead, for each player who played two of them in the same month (at least 5 games in each), the report measures how much better or worse they scored in each than both players' ratings predicted, and takes the difference.</li>
+        <li>Player-months are combined with random-effects weights, so players with many games count more but saturate. Rating bands use the player's average rating in those games.</li>
+        <li>Each month is labelled by which time control had at least two thirds of the player's games in that pair. Players do better in the one they play most, so the figure shown is the midpoint between those who mostly play one and those who mostly play the other: the gap for someone with no preference. Players who split their games evenly land close to that midpoint, which supports it.</li>
+        <li>Rating bands are shown only where at least 200 player-months played both and the 95% interval is narrower than about ±16 points; otherwise the all-ratings figure is used.</li>
+        <li>The time controls compared are the current home-page quick pairings plus each category's three most played over the whole data, which adds only ½+0 Bullet and 15+15 Classical.</li>
+      </ul>
+
+      <h2>Queue sizes</h2>
+      <ul>
+        <li>Games started is the measure: the more games a time control gets, the more people are waiting in its queue and the faster a pairing comes. Bot games are excluded.</li>
+        <li>Hours are UTC. Games per hour is the year's total for that hour divided by the days in the year. The rating band is the average of the two players' ratings, in 100-point steps.</li>
+      </ul>
+
+      <h2>Limits</h2>
+      <ul>
+        <li>Dual players are not a random sample of everyone. A 1500 Rapid player who also plays Blitz may differ from one who never does.</li>
+        <li>Lichess changed how fast rating deviation grows between games in August to September 2019 and again in January 2020, which shifts how quickly ratings settle around those dates.</li>
+        <li>Near the ends of each curve, and for the rarer categories, few players hold both ratings. The report marks a conversion as rough when its 95% interval is wider than ±16 points and leaves it out when wider than ±30.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="rc-core.js?v=9a4559d61847"></script>
+<script src="rc-runtime.js?v=9a4559d61847"></script>
+<script src="rc-tabs.js?v=9a4559d61847"></script>
+<script src="rc-q1.js?v=9a4559d61847"></script>
+<script src="rc-q2.js?v=9a4559d61847"></script>
+<script src="rc-q3.js?v=9a4559d61847"></script>
+```

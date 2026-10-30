@@ -117,6 +117,9 @@
   });
   dash.draw('q3-year-word', (el) => { const s = q3Year(); el.textContent = s ? String(s.year) : '—'; });
 
+  // hour-of-day heatmap: each row shaded across its own quietest-to-busiest range in five steps
+  const STEPS = ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#1c5cab'];   // reference blue ramp, light to dark
+  const PARTS = [[0, 'Night'], [6, 'Morning'], [12, 'Afternoon'], [18, 'Evening']];
   dash.draw('q3-heat', (el) => {
     if (!RC.ready(el, ['q3_hourly'])) return;
     const s = q3Year();
@@ -127,41 +130,55 @@
       return RC.CATS.indexOf(ga) - RC.CATS.indexOf(gb) || RC.tcDur(ta) - RC.tcDur(tb);
     });
     if (!keys.length) return RC.empty(el, 'No hourly data for this year.');
-    const rowH = 22, top = 22, bottom = 6;
-    const H = top + rowH * keys.length + bottom;
-    const {svg, w} = RC.svg(el, H);
     const label = (k) => k.replace('|', ' ').replace('Classical (pre-Nov 2017)', 'Classical (pre-2017)');
-    const left = RC.textWidth(svg, keys.map(label), 'rc-lab') + 14;
-    const ratioW = RC.textWidth(svg, ['×10.0']) + 12;
+    // wide: label | 24 cells | ratio on one line. Narrow: label and ratio on a line above full-width cells.
+    const width = Math.max(260, Math.floor(el.clientWidth || 600));
+    const probe = RC.svg(el, 10).svg;
+    const labW = RC.textWidth(probe, keys.map(label), 'rc-lab') + 14;
+    const ratW = RC.textWidth(probe, ['peak \u00f7 low']) + 12;
+    const stacked = (width - labW - ratW) / 24 < 14;
+    const cellH = stacked ? 18 : 22, lineH = stacked ? 15 : 0, rowH = cellH + lineH + 2, gap = 8, top = 40, bottom = 6;
+    const ys = [];
+    let y = top;
+    keys.forEach((k, i) => {
+      if (i && k.split('|')[0] !== keys[i - 1].split('|')[0]) y += gap;
+      ys.push(y);
+      y += rowH;
+    });
+    const H = y + bottom;
+    const {svg, w} = RC.svg(el, H);
+    const left = stacked ? 0 : labW, ratioW = stacked ? 0 : ratW;
     const cw = (w - left - ratioW) / 24;
-    // resolve two theme colors so the ramp can be interpolated
-    const probe = document.createElement('span');
-    el.append(probe);
-    probe.style.color = 'var(--color-panel)';
-    const c0 = getComputedStyle(probe).color;
-    probe.style.color = dash.colors[2];
-    const c1 = getComputedStyle(probe).color;
-    probe.remove();
-    const ramp = d3.interpolateRgb(c0, c1);
-    svg.append('g').selectAll('text').data(d3.range(0, 24, cw < 18 ? 6 : 3)).join('text').attr('class', 'rc-tick')
-      .attr('x', (h) => left + cw * h + cw / 2).attr('y', 12).attr('text-anchor', 'middle').text((h) => String(h).padStart(2, '0'));
-    svg.append('text').attr('class', 'rc-tick').attr('x', w - 4).attr('y', 12).attr('text-anchor', 'end').text('peak ÷ low');
+    // day parts, then hour ticks
+    for (const [h, name] of PARTS) {
+      svg.append('line').attr('x1', left + cw * h + 1).attr('x2', left + cw * (h + 6) - 1).attr('y1', 14).attr('y2', 14)
+        .style('stroke', 'var(--cds-chart-axis)').style('stroke-width', 1);
+      svg.append('text').attr('class', 'rc-tick').attr('x', left + cw * (h + 3)).attr('y', 10).attr('text-anchor', 'middle').text(name);
+    }
+    svg.append('g').selectAll('text').data(d3.range(0, 24, cw < 22 ? 6 : 3)).join('text').attr('class', 'rc-tick')
+      .attr('x', (h) => Math.max(left + 14, Math.min(w - ratioW - 14, left + cw * h + cw / 2))).attr('y', 31).attr('text-anchor', 'middle').text(RC.hourName);
+    if (!stacked) svg.append('text').attr('class', 'rc-tick').attr('x', w - 4).attr('y', 31).attr('text-anchor', 'end').text('peak \u00f7 low');
     const tt = RC.tip(el);
     keys.forEach((k, i) => {
       const vals = by.get(k).sort((a, b) => a.hour - b.hour);
       const max = d3.max(vals, (v) => v.games_per_hour), min = d3.min(vals, (v) => v.games_per_hour);
-      const yy = top + rowH * i;
-      svg.append('text').attr('class', 'rc-lab').attr('x', left - 8).attr('y', yy + rowH / 2).attr('dy', '0.32em').attr('text-anchor', 'end').text(label(k));
+      const step = (v) => Math.min(4, Math.floor(5 * (v.games_per_hour - min) / Math.max(max - min, 1e-9)));
+      const yy = ys[i] + lineH;
+      const ratio = min > 0 ? `\u00d7${(max / min).toFixed(1)}` : '';
+      if (stacked) svg.append('text').attr('class', 'rc-lab').attr('x', 0).attr('y', yy - 4).text(`${label(k)}   ${ratio} peak \u00f7 low`);
+      else svg.append('text').attr('class', 'rc-lab').attr('x', left - 8).attr('y', yy + cellH / 2).attr('dy', '0.32em').attr('text-anchor', 'end').text(label(k));
       svg.append('g').selectAll('rect').data(vals).join('rect')
-        .attr('x', (v) => left + cw * v.hour + 0.5).attr('y', yy + 1).attr('width', Math.max(1, cw - 1)).attr('height', rowH - 2).attr('rx', 2)
-        .style('fill', (v) => ramp(0.08 + 0.92 * (v.games_per_hour / max)))
-        .on('pointermove', (event, v) => tt.show(event, `${label(k)}, ${String(v.hour).padStart(2, '0')}:00–${String(v.hour + 1).padStart(2, '0')}:00 UTC`, [
-          [null, 'Games per hour', RC.fmtInt(Math.round(v.games_per_hour))],
+        .attr('x', (v) => left + cw * v.hour + 0.5).attr('y', yy).attr('width', Math.max(1, cw - 1)).attr('height', cellH).attr('rx', 2)
+        .style('fill', (v) => STEPS[step(v)])
+        .on('pointermove', (event, v) => tt.show(event, `${label(k)}, ${RC.hourName(v.hour)}\u2013${RC.hourName((v.hour + 1) % 24)} Pacific`, [
+          [STEPS[step(v)], 'Games per hour', RC.fmtInt(Math.round(v.games_per_hour))],
           [null, 'Share of busiest hour', d3.format('.0%')(v.games_per_hour / max)],
         ]))
         .on('pointerleave', () => tt.hide());
-      svg.append('text').attr('class', 'rc-tick').attr('x', w - 4).attr('y', yy + rowH / 2).attr('dy', '0.32em').attr('text-anchor', 'end')
-        .text(min > 0 ? `×${(max / min).toFixed(1)}` : '');
+      const peak = vals.find((v) => v.games_per_hour === max);
+      if (peak) svg.append('circle').attr('cx', left + cw * peak.hour + cw / 2).attr('cy', yy + cellH / 2).attr('r', 3)
+        .style('fill', '#ffffff').style('pointer-events', 'none');
+      if (!stacked) svg.append('text').attr('class', 'rc-tick').attr('x', w - 4).attr('y', yy + cellH / 2).attr('dy', '0.32em').attr('text-anchor', 'end').text(ratio);
     });
   });
 
@@ -195,7 +212,7 @@
     const f = el.dataset.field;
     if (!r) { el.removeAttribute('data-where'); el.textContent = '—'; return; }
     el.dataset.where = RC.where({year: r.year, group: r.group, tc: r.tc, band: r.band, hour: r.hour});
-    el.textContent = f === 'hour' ? String(r.hour).padStart(2, '0') : f === 'games_per_hour' ? d3.format(',.1f')(r[f]) : String(r[f]);
+    el.textContent = f === 'hour' ? RC.hourName(r.hour) : f === 'games_per_hour' ? d3.format(',.1f')(r[f]) : String(r[f]);
   });
   dash.draw('q3-band', (el) => {
     if (!RC.ready(el, ['q3_band'])) return;
@@ -209,9 +226,9 @@
     const left = RC.textWidth(svg, yt.map(fy)) + 14;
     const x = d3.scaleBand(d3.range(24), [left, w - 8]).padding(0.18);
     RC.yAxis(svg, y, yt, left, w - 8, fy);
-    svg.append('g').selectAll('text').data(d3.range(0, 24, x.bandwidth() < 16 ? 6 : 3)).join('text').attr('class', 'rc-tick')
-      .attr('x', (h) => x(h) + x.bandwidth() / 2).attr('y', H - bottom + 16).attr('text-anchor', 'middle').text((h) => String(h).padStart(2, '0'));
-    svg.append('text').attr('class', 'rc-tick').attr('x', w - 8).attr('y', H - 6).attr('text-anchor', 'end').text('Hour of day, UTC');
+    svg.append('g').selectAll('text').data(d3.range(0, 24, x.bandwidth() < 22 ? 6 : 3)).join('text').attr('class', 'rc-tick')
+      .attr('x', (h) => x(h) + x.bandwidth() / 2).attr('y', H - bottom + 16).attr('text-anchor', 'middle').text(RC.hourName);
+    svg.append('text').attr('class', 'rc-tick').attr('x', w - 8).attr('y', H - 6).attr('text-anchor', 'end').text('Hour of day, Pacific time');
     const col = RC.catColor(s.group);
     const tt = RC.tip(el);
     svg.append('g').selectAll('path').data(s.data).join('path')
@@ -220,7 +237,7 @@
         return `M${x0},${y0}V${y1 + r}Q${x0},${y1} ${x0 + r},${y1}H${x0 + bw - r}Q${x0 + bw},${y1} ${x0 + bw},${y1 + r}V${y0}Z`;
       })
       .style('fill', col).style('fill-opacity', (d) => (d === s.peak ? 1 : 0.6))
-      .on('pointermove', (event, d) => tt.show(event, `${s.t} ${s.group}, ${String(d.hour).padStart(2, '0')}:00 UTC`, [
+      .on('pointermove', (event, d) => tt.show(event, `${s.t} ${s.group}, ${RC.hourName(d.hour)}–${RC.hourName((d.hour + 1) % 24)} Pacific`, [
         [col, 'Games per hour', d3.format(',.1f')(d.games_per_hour)],
         [null, 'Rating band', `${s.band}–${s.band + 99}`],
       ]))

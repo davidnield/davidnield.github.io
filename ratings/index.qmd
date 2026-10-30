@@ -2,12 +2,12 @@
 title: "What is your rating worth?"
 subtitle: "Lichess ratings converted between categories and time controls, from players active in both at the same time, and how busy each queue is"
 # Self-contained page options, as on the Openings page. Every script, the stylesheet and every
-# data file is loaded with ?v=9a4559d61847, a content hash of the release stamped by
+# data file is loaded with ?v=b0c1a967c947, a content hash of the release stamped by
 # python/build_site.py, so a deploy never mixes with a browser's cached copy of the last one.
 format:
   html:
     include-in-header:
-      text: '<meta name="rc-version" content="9a4559d61847"><link rel="stylesheet" href="rc.css?v=9a4559d61847">'
+      text: '<meta name="rc-version" content="b0c1a967c947"><link rel="stylesheet" href="rc.css?v=b0c1a967c947">'
     toc: false
     page-layout: full
     anchor-sections: false
@@ -22,6 +22,7 @@ resources:
   - data/*.csv
   - data/q1/*.csv
   - data/q1_grid/*.csv
+  - data/q2/*.csv
 ---
 
 ```{=html}
@@ -143,9 +144,13 @@ resources:
       <label class="rc-field">You play
         <select id="q2-tc" data-draw="q2-tc"></select>
       </label>
-      <label class="rc-field">Year
-        <select id="q2-year" data-draw="q2-year"></select>
-      </label>
+      <div class="rc-field">
+        <label for="q2-month">Month</label>
+        <span class="rc-rating">
+          <input type="range" id="q2-month" data-draw="q2-month" min="0" max="0" step="1">
+          <output for="q2-month" class="rc-month-label" data-draw="q2-month-label">—</output>
+        </span>
+      </div>
       <div class="rc-field">
         <label for="q2-rating">Your rating</label>
         <span class="rc-rating">
@@ -156,24 +161,22 @@ resources:
     </div>
 
     <div class="rc-card rc-q2-answer" id="q2-answer">
-      <span class="rc-eyebrow"><span data-draw="q2-word" data-word="group">—</span> <span data-draw="q2-word" data-word="tc">—</span> · <span data-draw="q2-word" data-word="rating">—</span> · <span data-draw="q2-word" data-word="year">—</span></span>
+      <span class="rc-eyebrow"><span data-draw="q2-word" data-word="group">—</span> <span data-draw="q2-word" data-word="tc">—</span> · <span data-draw="q2-word" data-word="rating">—</span> · <span data-draw="q2-word" data-word="month">—</span></span>
       <p class="rc-lead">If every <span data-draw="q2-word" data-word="group">—</span> time control had its own rating, a <span data-draw="q2-word" data-word="tc">—</span> player rated <span data-draw="q2-word" data-word="rating">—</span> would be rated about:</p>
       <div class="rc-tiles" data-draw="q2-tiles"></div>
       <p class="rc-note">Higher means that queue is easier: at the same rating, the players you meet there are weaker. These figures are for someone who plays both about equally. If you mostly play one time control you will do better in it than this suggests, and worse in the others.</p>
-      <p class="rc-warn rc-q2-all" hidden>Too few players near this rating play both, so these figures use players of all ratings.</p>
-      <span data-draw="q2-msg"></span>
     </div>
 
     <div class="rc-grid">
       <div class="rc-card" id="q2-rating-card">
         <h2>The gap depends on your rating</h2>
-        <p class="rc-note">How many points higher (above the line) or lower (below it) a <span data-draw="q2-word" data-word="tc">—</span> player would be rated in each other time control, at each <span data-draw="q2-word" data-word="tc">—</span> rating, in <span data-draw="q2-word" data-word="year">—</span>. Shaded bands are 95% intervals. Click to pick a rating.</p>
+        <p class="rc-note">How many points higher (above the line) or lower (below it) a <span data-draw="q2-word" data-word="tc">—</span> player would be rated in each other time control, at each <span data-draw="q2-word" data-word="tc">—</span> rating, in <span data-draw="q2-word" data-word="month">—</span>. Shaded bands are 95% intervals; a line stops where its interval would be wider than ±16 points. Click to pick a rating.</p>
         <div class="rc-chart dash-skeleton" id="q2-rating-chart" data-draw="q2-by-rating"></div>
       </div>
 
       <div class="rc-card" id="q2-trend-card">
-        <h2>Has it changed over the years?</h2>
-        <p class="rc-note">The same gaps each year, for <span data-draw="q2-word" data-word="tc">—</span> players rated <span data-draw="q2-word" data-word="trendband">—</span>. Click to pick a year.</p>
+        <h2>Month by month</h2>
+        <p class="rc-note">The same gaps each month, for <span data-draw="q2-word" data-word="tc">—</span> players rated <span data-draw="q2-word" data-word="rating">—</span>. Click to pick a month.</p>
         <div class="rc-chart dash-skeleton" id="q2-trend-chart" data-draw="q2-trend"></div>
       </div>
 
@@ -183,6 +186,7 @@ resources:
           <li>All time controls in a category share one rating, so there is no second rating to compare. Instead the report takes players who played both time controls in the same month.</li>
           <li>In each time control, it compares how they actually scored with what their own and their opponents' ratings predicted, and turns the difference into rating points.</li>
           <li>People do better in whichever time control they play most. To cancel that out, it averages the players who mostly play one with those who mostly play the other. What is left is how much tougher one queue is than the other at the same rating.</li>
+          <li>Each figure is smoothed across nearby ratings and months the same way as the conversions between categories: a weighted local fit that widens only where few players play both.</li>
         </ol>
       </div>
     </div>
@@ -227,7 +231,12 @@ resources:
     </div>
     <div class="rc-card" id="q3-heat-card">
       <h2>When the queues are busy, <span data-draw="q3-year-word">—</span></h2>
-      <p class="rc-note">Games started in each hour of the day (UTC), shaded relative to each time control's own busiest hour. The right-hand column is busiest hour ÷ quietest hour: the bigger it is, the more your wait depends on when you play.</p>
+      <p class="rc-note">Games started in each hour of the day, US Pacific time. Each row is shaded from its own quietest hour (lightest) to its busiest (darkest, with a dot) in five steps, so you can see when each queue fills up whatever its size. The right-hand column is busiest hour ÷ quietest hour: the bigger it is, the more your wait depends on when you play.</p>
+      <ul class="rc-legend" aria-label="Shading key">
+        <li>Quietest</li>
+        <li><span class="rc-sw" style="background:#cde2fb"></span><span class="rc-sw" style="background:#9ec5f4"></span><span class="rc-sw" style="background:#6da7ec"></span><span class="rc-sw" style="background:#3987e5"></span><span class="rc-sw" style="background:#1c5cab"></span></li>
+        <li>Busiest hour of that time control</li>
+      </ul>
       <div class="rc-chart dash-skeleton" id="q3-heat" data-draw="q3-heat"></div>
     </div>
 
@@ -241,7 +250,7 @@ resources:
           <input type="number" class="rc-q3band" id="q3-band" min="400" max="3000" step="100">
         </label>
       </div>
-      <p class="rc-note">Games per hour in <span data-draw="q3-band-stat" data-stat="peak" data-field="year">—</span> where the two players averaged <span data-draw="q3-word" data-word="band">—</span>. Busiest at <b data-draw="q3-band-stat" data-stat="peak" data-field="hour">—</b>:00 UTC with <b data-draw="q3-band-stat" data-stat="peak" data-field="games_per_hour">—</b> games an hour; quietest at <b data-draw="q3-band-stat" data-stat="low" data-field="hour">—</b>:00 UTC with <b data-draw="q3-band-stat" data-stat="low" data-field="games_per_hour">—</b>.</p>
+      <p class="rc-note">Games per hour in <span data-draw="q3-band-stat" data-stat="peak" data-field="year">—</span> where the two players averaged <span data-draw="q3-word" data-word="band">—</span>. Busiest at <b data-draw="q3-band-stat" data-stat="peak" data-field="hour">—</b> Pacific time with <b data-draw="q3-band-stat" data-stat="peak" data-field="games_per_hour">—</b> games an hour; quietest at <b data-draw="q3-band-stat" data-stat="low" data-field="hour">—</b> Pacific time with <b data-draw="q3-band-stat" data-stat="low" data-field="games_per_hour">—</b>.</p>
       <div class="rc-chart dash-skeleton" id="q3-band-chart" data-draw="q3-band"></div>
     </div>
   </section>
@@ -267,16 +276,16 @@ resources:
       <h2>Within a category</h2>
       <ul>
         <li>Time controls in one category move the same rating, so there are no two ratings to compare. Instead, for each player who played two of them in the same month (at least 5 games in each), the report measures how much better or worse they scored in each than both players' ratings predicted, and takes the difference.</li>
-        <li>Player-months are combined with random-effects weights, so players with many games count more but saturate. Rating bands use the player's average rating in those games.</li>
+        <li>Player-months are combined with random-effects weights, so players with many games count more but saturate. A player's rating here is their average rating in those games.</li>
         <li>Each month is labelled by which time control had at least two thirds of the player's games in that pair. Players do better in the one they play most, so the figure shown is the midpoint between those who mostly play one and those who mostly play the other: the gap for someone with no preference. Players who split their games evenly land close to that midpoint, which supports it.</li>
-        <li>Rating bands are shown only where at least 200 player-months played both and the 95% interval is narrower than about ±16 points; otherwise the all-ratings figure is used.</li>
+        <li>Each group's average is a weighted local fit in rating and month, like the conversions between categories: ±25 rating points and ±2.5 months where data is dense, widening (to at most ±150 points and ±13 months) until each group has about 400 player-months. A figure is shown only where its 95% interval is narrower than ±16 points.</li>
         <li>The time controls compared are the current home-page quick pairings plus each category's three most played over the whole data, which adds only ½+0 Bullet and 15+15 Classical.</li>
       </ul>
 
       <h2>Queue sizes</h2>
       <ul>
         <li>Games started is the measure: the more games a time control gets, the more people are waiting in its queue and the faster a pairing comes. Bot games are excluded.</li>
-        <li>Hours are UTC. Games per hour is the year's total for that hour divided by the days in the year. The rating band is the average of the two players' ratings, in 100-point steps.</li>
+        <li>Hours are US Pacific time, following daylight saving. The data gives each game's month and UTC hour but not its day, so in March and November each hour is split between the two offsets in proportion to the days on each side of the clock change. Games per hour is the year's total for that hour divided by the days in the year. The rating band is the average of the two players' ratings, in 100-point steps.</li>
       </ul>
 
       <h2>Limits</h2>
@@ -291,10 +300,10 @@ resources:
 
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-<script src="rc-core.js?v=9a4559d61847"></script>
-<script src="rc-runtime.js?v=9a4559d61847"></script>
-<script src="rc-tabs.js?v=9a4559d61847"></script>
-<script src="rc-q1.js?v=9a4559d61847"></script>
-<script src="rc-q2.js?v=9a4559d61847"></script>
-<script src="rc-q3.js?v=9a4559d61847"></script>
+<script src="rc-core.js?v=b0c1a967c947"></script>
+<script src="rc-runtime.js?v=b0c1a967c947"></script>
+<script src="rc-tabs.js?v=b0c1a967c947"></script>
+<script src="rc-q1.js?v=b0c1a967c947"></script>
+<script src="rc-q2.js?v=b0c1a967c947"></script>
+<script src="rc-q3.js?v=b0c1a967c947"></script>
 ```

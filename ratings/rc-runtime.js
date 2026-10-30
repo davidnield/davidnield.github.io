@@ -18,6 +18,7 @@
   function fileFor(id) {
     if (id.startsWith("q1p:")) return `data/q1/${id.slice(4)}.csv`;
     if (id.startsWith("q1g:")) return `data/q1_grid/${id.slice(4)}.csv`;
+    if (id.startsWith("q2m:")) return `data/q2/${id.slice(4)}.csv`;
     return `data/${id}.csv`;
   }
   const url = (path) => new URL(`${path}?v=${VERSION}`, document.baseURI).href;

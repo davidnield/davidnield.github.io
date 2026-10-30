@@ -1,7 +1,7 @@
 // Shared helpers for every drawing on the page. Loaded before rc-runtime.js, which reads the defaults.
 window.RC = (() => {
   const DEFAULTS = {tab: 'convert', from: 'Rapid', to: 'Blitz', month: 'latest', rating: 1500,
-    q2group: 'Blitz', q2tc: '3+0', q2year: 2025, q2rating: 1500, q3group: 'Blitz', q3year: 2025, q3tc: 'Blitz|3+0', q3band: 1500};
+    q2group: 'Blitz', q2tc: '3+0', q2month: 'latest', q2rating: 1500, q3group: 'Blitz', q3year: 2025, q3tc: 'Blitz|3+0', q3band: 1500};
   window.RC_DEFAULTS = DEFAULTS;
   const LATEST_FULL_YEAR = 2025;
   const MIN_N = 30;
@@ -163,6 +163,7 @@ window.RC = (() => {
 
   // ---- Q1 state: the chosen pair (one file per direction), month (default: the latest) and rating
   const pairId = (from, to) => `q1p:${dash.fileSafe(from)}__${dash.fileSafe(to)}`;
+  const hourName = (h) => `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'am' : 'pm'}`;
   const monthName = (m) => d3.utcFormat('%b %Y')(new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1, 1)));
   function q1() {
     const p = params();
@@ -177,29 +178,43 @@ window.RC = (() => {
     return {id, from: p.from, to: p.to, months, month, year: month ? +month.slice(0, 4) : null, rows: cur,
       rating, rating100: snap(rating, 100), row, latest: month === months[months.length - 1]};
   }
-  // ---- Q2 state: your time control, year, rating band, and the equivalence row for each other time control
+  // ---- Q2 state: your time control, month (default: the latest), rating, and for each other time
+  // control of the category the rating equivalence. Each file row is one pair, faster tc1 vs slower
+  // tc2, with d = rating in tc1 minus rating in tc2 (the pool effect); both directions come from it.
+  const q2Cache = new Map();
+  function q2Index(id) {
+    const r = rows(id);
+    if (!r) return null;
+    const c = q2Cache.get(id);
+    if (c && c.src === r) return c.index;
+    const byKey = new Map();      // `${from}|${to}` -> rows, each {month, rating, shift, lo95, hi95, n}
+    const add = (from, to, v) => { const k = `${from}|${to}`; if (!byKey.has(k)) byKey.set(k, []); byKey.get(k).push(v); };
+    for (const x of r) {
+      const base = {month: x.month, rating: x.rating, n: x.n};
+      add(x.tc2, x.tc1, {...base, shift: x.d, lo95: x.lo95, hi95: x.hi95});
+      add(x.tc1, x.tc2, {...base, shift: -x.d, lo95: -x.hi95, hi95: -x.lo95});
+    }
+    const tcs = [...new Set(r.flatMap((x) => [x.tc1, x.tc2]))].sort((a, b) => tcDur(a) - tcDur(b));
+    const months = [...new Set(r.map((x) => x.month))].sort();
+    const index = {byKey, tcs, months};
+    q2Cache.set(id, {src: r, index});
+    return index;
+  }
   function q2() {
     const p = params();
-    const m = group('q2_equiv', 'group', (r) => r.group);
-    if (!m) return null;
-    const g = m.get(p.q2group) || [];
-    const tcs = [...new Set(g.map((r) => r.from_tc))].sort((a, b) => tcDur(a) - tcDur(b));
-    const tc = tcs.includes(p.q2tc) ? p.q2tc : tcs.includes(DEFAULT_TC[p.q2group]) ? DEFAULT_TC[p.q2group] : tcs[0];
-    const mine = g.filter((r) => r.from_tc === tc);
-    const years = [...new Set(mine.filter((r) => String(r.band) === 'all').map((r) => r.year))].sort((a, b) => a - b);
-    let year = +p.q2year;
-    if (!years.includes(year)) year = years.filter((y) => y <= LATEST_FULL_YEAR).pop() ?? years[years.length - 1] ?? year;
+    const id = `q2m:${dash.fileSafe(p.q2group)}`;
+    const ix = q2Index(id);
+    if (!ix) return null;
+    const tc = ix.tcs.includes(p.q2tc) ? p.q2tc : ix.tcs.includes(DEFAULT_TC[p.q2group]) ? DEFAULT_TC[p.q2group] : ix.tcs[0];
+    const month = ix.months.includes(p.q2month) ? p.q2month : ix.months[ix.months.length - 1];
     const rating = snap(p.q2rating, 25);
-    const band = String(Math.floor(rating / 100) * 100);
-    const targets = tcs.filter((t) => t !== tc);
-    const cur = mine.filter((r) => r.year === year);
-    const find = (t, b) => cur.find((r) => r.to_tc === t && String(r.band) === b);
-    let rows = targets.map((t) => find(t, band));
-    const useAll = rows.some((r) => !r);
-    if (useAll) rows = targets.map((t) => find(t, 'all'));
-    return {group: p.q2group, tcs, tc, mine, years, year, rating, band, targets, rows, useAll};
+    const targets = ix.tcs.filter((t) => t !== tc);
+    const series = (t) => ix.byKey.get(`${tc}|${t}`) || [];
+    const rows = targets.map((t) => series(t).find((r) => r.month === month && r.rating === rating) || null);
+    return {id, group: p.q2group, tcs: ix.tcs, tc, months: ix.months, month, latest: month === ix.months[ix.months.length - 1],
+      rating, targets, series, rows};
   }
 
   return {DEFAULTS, LATEST_FULL_YEAR, MIN_N, CATS, params, rough, rows, group, where, snap, tcDur, catColor, swatch,
-    ready, empty, svg, textWidth, tip, yAxis, xAxis, fmtInt, fmtSigned, fmt1, fmtR, q1, q2, pairId, monthName};
+    ready, empty, svg, textWidth, tip, yAxis, xAxis, fmtInt, fmtSigned, fmt1, fmtR, q1, q2, pairId, monthName, hourName};
 })();

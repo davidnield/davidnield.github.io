@@ -2,12 +2,12 @@
 title: "What is your rating worth?"
 subtitle: "Lichess ratings converted between categories and time controls, from players active in both at the same time, and how busy each queue is"
 # Self-contained page options, as on the Openings page. Every script, the stylesheet and every
-# data file is loaded with ?v=b0c1a967c947, a content hash of the release stamped by
+# data file is loaded with ?v=9c9549a6d071, a content hash of the release stamped by
 # python/build_site.py, so a deploy never mixes with a browser's cached copy of the last one.
 format:
   html:
     include-in-header:
-      text: '<meta name="rc-version" content="b0c1a967c947"><link rel="stylesheet" href="rc.css?v=b0c1a967c947">'
+      text: '<meta name="rc-version" content="9c9549a6d071"><link rel="stylesheet" href="rc.css?v=9c9549a6d071">'
     toc: false
     page-layout: full
     anchor-sections: false
@@ -282,12 +282,6 @@ resources:
         <li>The time controls compared are the current home-page quick pairings plus each category's three most played over the whole data, which adds only ½+0 Bullet and 15+15 Classical.</li>
       </ul>
 
-      <h2>Queue sizes</h2>
-      <ul>
-        <li>Games started is the measure: the more games a time control gets, the more people are waiting in its queue and the faster a pairing comes. Bot games are excluded.</li>
-        <li>Hours are US Pacific time, following daylight saving. The data gives each game's month and UTC hour but not its day, so in March and November each hour is split between the two offsets in proportion to the days on each side of the clock change. Games per hour is the year's total for that hour divided by the days in the year. The rating band is the average of the two players' ratings, in 100-point steps.</li>
-      </ul>
-
       <h2>Limits</h2>
       <ul>
         <li>Dual players are not a random sample of everyone. A 1500 Rapid player who also plays Blitz may differ from one who never does.</li>
@@ -300,10 +294,10 @@ resources:
 
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-<script src="rc-core.js?v=b0c1a967c947"></script>
-<script src="rc-runtime.js?v=b0c1a967c947"></script>
-<script src="rc-tabs.js?v=b0c1a967c947"></script>
-<script src="rc-q1.js?v=b0c1a967c947"></script>
-<script src="rc-q2.js?v=b0c1a967c947"></script>
-<script src="rc-q3.js?v=b0c1a967c947"></script>
+<script src="rc-core.js?v=9c9549a6d071"></script>
+<script src="rc-runtime.js?v=9c9549a6d071"></script>
+<script src="rc-tabs.js?v=9c9549a6d071"></script>
+<script src="rc-q1.js?v=9c9549a6d071"></script>
+<script src="rc-q2.js?v=9c9549a6d071"></script>
+<script src="rc-q3.js?v=9c9549a6d071"></script>
 ```

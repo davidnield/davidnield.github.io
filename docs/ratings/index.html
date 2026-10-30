@@ -82,7 +82,7 @@ function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
 gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 </script>
-<meta name="rc-version" content="9c9549a6d071"><link rel="stylesheet" href="rc.css?v=9c9549a6d071">
+<meta name="rc-version" content="cdfac620e0bd"><link rel="stylesheet" href="rc.css?v=cdfac620e0bd">
 
 
 <link rel="stylesheet" href="../styles.css">
@@ -217,7 +217,7 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
         <div><dt>Player-months behind this figure</dt><dd><span data-draw="c-val" data-field="n">—</span></dd></div>
         <div><dt>Smoothing window</dt><dd><span data-draw="c-val" data-field="window">—</span></dd></div>
       </dl>
-      <p class="rc-warn rc-q1-rough" hidden="">Rough figure: few players hold both ratings at this level, so the 95% interval is wider than ±16 points.</p>
+      <p class="rc-warn rc-q1-rough" hidden="">Rough figure: few players hold both ratings at this level, so the 95% interval is wider than ±50 points.</p>
       <p class="rc-warn rc-q1-thin" hidden="">Too few players held both ratings near this level in this month for a reliable figure. Try a rating nearer the middle of the curve, or another month.</p>
       <span data-draw="q1-msg"></span>
     </div>
@@ -225,12 +225,12 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
     <div class="rc-grid">
       <div class="rc-card rc-wide" id="q1-curve-card">
         <h2>The whole conversion curve</h2>
-        <p class="rc-note">Average <span data-draw="p-to">—</span> rating at each <span data-draw="p-from">—</span> rating in <span data-draw="p-month">—</span>, with the spread of individual players around it. The curve is smoothed across neighbouring ratings and months, more widely where few players hold both ratings, and stops where it would be less precise than about ±30 points. The line is dashed where the average is rough, with a 95% interval wider than ±16. Click the chart to pick a rating. The average regresses toward the middle, so converting back the other way does not return the rating you started with; the same-percentile line is the symmetric alternative.</p>
+        <p class="rc-note">Average <span data-draw="p-to">—</span> rating at each <span data-draw="p-from">—</span> rating in <span data-draw="p-month">—</span>, with the spread of individual players around it. The curve is smoothed across neighbouring ratings and months, more widely where few players hold both ratings, and stops where it would be less precise than about ±100 points. The line is dashed where the average is rough, with a 95% interval wider than ±50. Click the chart to pick a rating. The average regresses toward the middle, so converting back the other way does not return the rating you started with; the same-percentile line is the symmetric alternative.</p>
         <ul class="rc-legend">
           <li><span class="rc-sw rc-sw-line" data-swatch="to"></span>Average</li>
           <li><span class="rc-sw" data-swatch="to" style="opacity:.45"></span>Middle half of players</li>
           <li><span class="rc-sw" data-swatch="to" style="opacity:.2"></span>Middle 80%</li>
-          <li><span class="rc-sw rc-sw-dash" data-swatch-color="to"></span>Rough average (interval wider than ±16)</li>
+          <li><span class="rc-sw rc-sw-dash" data-swatch-color="to"></span>Rough average (interval wider than ±50)</li>
           <li><span class="rc-sw rc-sw-dash" style="color: var(--color-fg-muted)"></span>Same percentile</li>
           <li><span class="rc-sw rc-sw-dash" style="color: var(--cds-chart-reference)"></span>Equal ratings</li>
         </ul>
@@ -251,7 +251,7 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 
       <div class="rc-card rc-wide" id="q1-grid-card">
         <h3>Lookup table for <span data-draw="p-from">—</span>, <span data-draw="p-month">—</span></h3>
-        <p class="rc-note">Average rating in each other category for players at each <span data-draw="p-from">—</span> rating. Values in grey italics are rough (95% interval wider than ±16 points); blank where it would be wider than ±30. Click a row to select that rating.</p>
+        <p class="rc-note">Average rating in each other category for players at each <span data-draw="p-from">—</span> rating. Values in grey italics are rough (95% interval wider than ±50 points); blank where it would be wider than ±100. Click a row to select that rating.</p>
         <div class="rc-table-box">
           
 <table id="q1-grid" class="rc-table caption-top">
@@ -413,6 +413,7 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
         <li><b>Drift is handled month by month.</b> Every figure belongs to one month and borrows only from the months around it, so a conversion always describes the pools as they were at that time.</li>
         <li><b>Two kinds of answer.</b> The average is the expected rating in the other category for people at your rating. Because nobody's two ratings move in lockstep, it regresses toward the middle, so A to B and B to A are not inverses. The same-percentile rating matches ranks among the dual players instead, and is symmetric.</li>
         <li><b>Smoothing.</b> Each figure is a weighted fit through the player-months nearby in both rating and time: a local-linear smoother (the core of loess) with weights falling off smoothly with distance in rating points and in months, and a linear trend in time so the latest months are not dragged toward the past. The window is ±25 rating points and ±2.5 months where data is dense, and widens step by step to at most ±150 points and ±13 months until about 1,500 player-months are inside it, so busy pairs keep near-monthly detail and rare ones borrow from their neighbours. The spread of players comes from the same window after moving each neighbour along the fitted slope. The same-percentile rating and the method comparison are yearly.</li>
+        <li><b>Always rising.</b> A higher rating in one category should never mean a lower expected rating in the other, but where few players hold both, noise can make a smoothed curve dip. Each month's curve is therefore made non-decreasing (a weighted isotonic regression): a stretch that dips becomes a flat run at its precision-weighted average, and rising stretches are left alone. The spread of players is treated the same way. This moved about 3% of the figures, mostly rough ones, and almost always by less than their 95% interval.</li>
         <li><b>Intervals.</b> 95% intervals come from a jackknife over 16 groups of players. The middle half and middle 80% describe how individual players spread around the average.</li>
       </ul>
 
@@ -429,7 +430,7 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
       <ul>
         <li>Dual players are not a random sample of everyone. A 1500 Rapid player who also plays Blitz may differ from one who never does.</li>
         <li>Lichess changed how fast rating deviation grows between games in August to September 2019 and again in January 2020, which shifts how quickly ratings settle around those dates.</li>
-        <li>Near the ends of each curve, and for the rarer categories, few players hold both ratings. The report marks a conversion as rough when its 95% interval is wider than ±16 points and leaves it out when wider than ±30.</li>
+        <li>Near the ends of each curve, and for the rarer categories, few players hold both ratings. The report marks a conversion as rough when its 95% interval is wider than ±50 points and leaves it out when wider than ±100. Read a rough figure as a range.</li>
       </ul>
     </div>
   </section>
@@ -437,12 +438,12 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-<script src="rc-core.js?v=9c9549a6d071"></script>
-<script src="rc-runtime.js?v=9c9549a6d071"></script>
-<script src="rc-tabs.js?v=9c9549a6d071"></script>
-<script src="rc-q1.js?v=9c9549a6d071"></script>
-<script src="rc-q2.js?v=9c9549a6d071"></script>
-<script src="rc-q3.js?v=9c9549a6d071"></script>
+<script src="rc-core.js?v=cdfac620e0bd"></script>
+<script src="rc-runtime.js?v=cdfac620e0bd"></script>
+<script src="rc-tabs.js?v=cdfac620e0bd"></script>
+<script src="rc-q1.js?v=cdfac620e0bd"></script>
+<script src="rc-q2.js?v=cdfac620e0bd"></script>
+<script src="rc-q3.js?v=cdfac620e0bd"></script>
 
 
 

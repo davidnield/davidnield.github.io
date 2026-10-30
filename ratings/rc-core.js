@@ -10,7 +10,7 @@ window.RC = (() => {
   const TEXT_COLS = new Set(['from', 'to', 'group', 'tc', 'tc1', 'tc2', 'pair', 'spec', 'subset', 'variant', 'quarter', 'month', 'id', 'cat_a', 'cat_b', 'from_tc', 'to_tc']);
 
   const params = () => ({...DEFAULTS, ...dash.params()});
-  const ROUGH = 16;   // a conversion whose 95% interval is wider than +-ROUGH is shown as rough
+  const ROUGH = 50;   // a conversion whose 95% interval is wider than +-ROUGH is shown as rough
   const rough = (r) => r.hi95 - r.lo95 > 2 * ROUGH;
   const cache = new Map();
   function rows(id) {

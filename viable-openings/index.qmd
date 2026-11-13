@@ -32,7 +32,7 @@ A line qualifies when every move stays within the allowed loss from the mover’
     <div class="rc-card of-filter">
       <label class="of-label" for="of-band">Evaluation band around zero <output for="of-band" id="of-band-value"></output></label>
       <div id="of-band-ticks" class="of-ticks rc-note tabular-nums" aria-hidden="true"></div>
-      <input id="of-band" type="range" min="0" max="100" step="1" value="100">
+      <input id="of-band" type="range" min="0" max="100" step="1" value="50">
       <div id="of-band-odds" class="of-ticks rc-note tabular-nums" aria-hidden="true"></div>
       <div id="of-band-note" class="rc-note"></div>
     </div>
@@ -84,5 +84,5 @@ A line qualifies when every move stays within the allowed loss from the mover’
     <p class="rc-note">Ply 6 has an exact count of outstanding evaluations. Plies 7 and 8 use 64 sampled walks, weighting each missing position by the number of qualifying routes to it and accounting for earlier fills. Times cover additional engine work at each ply. <span id="of-rate"></span></p>
   </details>
 </section>
-<script defer src="filters.js?v=590d9c9d227e"></script>
+<script defer src="filters.js?v=869c7e5b573f"></script>
 ```

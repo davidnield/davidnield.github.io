@@ -6,6 +6,7 @@ project:
   resources:
     - CNAME
     - .nojekyll
+    - opening-filters/index.html
 
 website:
   # title: "Personal Website"
@@ -28,7 +29,7 @@ website:
       - text: Opening Popularity
         href: openings/index.qmd
       - text: Viable Openings
-        href: opening-filters/index.qmd
+        href: viable-openings/index.qmd
       - text: Time Controls Popularity
         href: time-controls/index.qmd
       - text: Time Control Rating Conversion

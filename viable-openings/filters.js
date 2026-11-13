@@ -305,11 +305,13 @@
     showLines();
   }
   let preferredPly=5;
-  const savedCp = (v,fallback) => Number.isInteger(v) && v>=0 ? Math.min(v,meta.cap) : fallback;
   function restore(snapshot) {
     const s=snapshot?.modelContent;
-    el("loss").value=s?.version===2 ? savedCp(s.lossCp,20) : 20;
-    el("band").value=s?.version===2 ? savedCp(s.bandCp,100) : 100;
+    for (const id of ["loss","band"]) {
+      const input=el(id);
+      const saved=s?.version===2 ? s[id+"Cp"] : undefined;
+      input.value=Number.isInteger(saved) && saved>=0 ? Math.min(saved,meta.cap) : input.defaultValue;
+    }
     preferredPly=[1,2,3,4,5].includes(s?.samplePly) ? s.samplePly : 5;
     sortKey=columns.includes(s?.sortKey) ? s.sortKey : "games";
     descending=typeof s?.descending==="boolean" ? s.descending : sortKey==="games";

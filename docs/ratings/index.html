@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>What is your rating worth? – David Nield</title>
+<title>Time Control Rating Conversion – David Nield</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -82,16 +82,16 @@ function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
 gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 </script>
-<meta name="rc-version" content="cdfac620e0bd"><link rel="stylesheet" href="rc.css?v=cdfac620e0bd">
+<meta name="rc-version" content="544ab73b3989"><link rel="stylesheet" href="rc.css?v=544ab73b3989">
 
 
 <link rel="stylesheet" href="../styles.css">
-<meta property="og:title" content="What is your rating worth? – David Nield">
-<meta property="og:description" content="Lichess ratings converted between categories and time controls, from players active in both at the same time, and how busy each queue is">
+<meta property="og:title" content="Time Control Rating Conversion – David Nield">
+<meta property="og:description" content="Compare Lichess ratings across categories and time controls using players who were active in both.">
 <meta property="og:site_name" content="David Nield">
 <meta property="og:locale" content="en_US">
-<meta name="twitter:title" content="What is your rating worth? – David Nield">
-<meta name="twitter:description" content="Lichess ratings converted between categories and time controls, from players active in both at the same time, and how busy each queue is">
+<meta name="twitter:title" content="Time Control Rating Conversion – David Nield">
+<meta name="twitter:description" content="Compare Lichess ratings across categories and time controls using players who were active in both.">
 <meta name="twitter:creator" content="@DRNield">
 <meta name="twitter:site" content="@DRNield">
 <meta name="twitter:card" content="summary_large_image">
@@ -119,15 +119,19 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="../openings/index.html"> 
-<span class="menu-text">Openings</span></a>
+<span class="menu-text">Opening Popularity</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="../opening-filters/index.html"> 
-<span class="menu-text">Opening Filters</span></a>
+<span class="menu-text">Viable Openings</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../time-controls/index.html"> 
+<span class="menu-text">Time Controls Popularity</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link active" href="../ratings/index.html" aria-current="page"> 
-<span class="menu-text">Ratings</span></a>
+<span class="menu-text">Time Control Rating Conversion</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="../files/resume.pdf"> 
@@ -150,8 +154,8 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">What is your rating worth?</h1>
-<p class="subtitle lead">Lichess ratings converted between categories and time controls, from players active in both at the same time, and how busy each queue is</p>
+<h1 class="title">Time Control Rating Conversion</h1>
+<p class="subtitle lead">Compare Lichess ratings across categories and time controls using players who were active in both.</p>
 </div>
 
 
@@ -173,7 +177,6 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
   <nav class="rc-tabs" role="tablist" aria-label="Report sections">
     <button type="button" role="tab" data-tab="convert" aria-selected="true">Between categories</button>
     <button type="button" role="tab" data-tab="timecontrols" aria-selected="false">Within a category</button>
-    <button type="button" role="tab" data-tab="queues" aria-selected="false">Queue sizes</button>
     <button type="button" role="tab" data-tab="method" aria-selected="false">Method</button>
   </nav>
 
@@ -339,69 +342,6 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
     </div>
   </section>
 
-  <!-- ============ Q3 ============ -->
-  <section class="rc-page" id="queues" hidden="">
-    <div class="rc-grid">
-      <div class="rc-card rc-wide" id="q3-share-card">
-        <h2>Share of lobby games by category</h2>
-        <p class="rc-note">Each month's rated lobby games split by category. Rapid arrived in November 2017, taking the 8 to 25 minute games from the old Classical.</p>
-        <ul class="rc-legend">
-          <li><span class="rc-sw" data-swatch="cat:UltraBullet"></span>UltraBullet</li>
-          <li><span class="rc-sw" data-swatch="cat:Bullet"></span>Bullet</li>
-          <li><span class="rc-sw" data-swatch="cat:Blitz"></span>Blitz</li>
-          <li><span class="rc-sw" data-swatch="cat:Rapid"></span>Rapid</li>
-          <li><span class="rc-sw" data-swatch="cat:Classical (pre-Nov 2017)"></span>Classical (pre-Nov 2017)</li>
-          <li><span class="rc-sw" data-swatch="cat:Classical"></span>Classical</li>
-          <li><span class="rc-sw" data-swatch="cat:Correspondence"></span>Correspondence</li>
-        </ul>
-        <div class="rc-chart dash-skeleton" id="q3-share" data-draw="q3-share"></div>
-      </div>
-    </div>
-
-    <div class="rc-controls">
-      <label class="rc-field">Category
-        <select class="rc-q3group" id="q3-group">
-          <option>UltraBullet</option><option>Bullet</option><option>Blitz</option><option>Rapid</option><option>Classical</option><option>Classical (pre-Nov 2017)</option><option>Correspondence</option>
-        </select>
-      </label>
-    </div>
-    <div class="rc-card" id="q3-monthly-card">
-      <h2>Games per day in each <span data-draw="q3-word" data-word="group">—</span> time control</h2>
-      <p class="rc-note">Average rated lobby games started per day, by month: a stand-in for how many people are in each queue. "other" is every remaining time control in the category.</p>
-      <div class="rc-chart rc-chart-tall dash-skeleton" id="q3-monthly" data-draw="q3-monthly"></div>
-    </div>
-
-    <div class="rc-controls">
-      <label class="rc-field">Year
-        <select id="q3-year" data-draw="q3-year"></select>
-      </label>
-    </div>
-    <div class="rc-card" id="q3-heat-card">
-      <h2>When the queues are busy, <span data-draw="q3-year-word">—</span></h2>
-      <p class="rc-note">Games started in each hour of the day, US Pacific time. Each row is shaded from its own quietest hour (lightest) to its busiest (darkest, with a dot) in five steps, so you can see when each queue fills up whatever its size. The right-hand column is busiest hour ÷ quietest hour: the bigger it is, the more your wait depends on when you play.</p>
-      <ul class="rc-legend" aria-label="Shading key">
-        <li>Quietest</li>
-        <li><span class="rc-sw" style="background:#cde2fb"></span><span class="rc-sw" style="background:#9ec5f4"></span><span class="rc-sw" style="background:#6da7ec"></span><span class="rc-sw" style="background:#3987e5"></span><span class="rc-sw" style="background:#1c5cab"></span></li>
-        <li>Busiest hour of that time control</li>
-      </ul>
-      <div class="rc-chart dash-skeleton" id="q3-heat" data-draw="q3-heat"></div>
-    </div>
-
-    <div class="rc-card" id="q3-band-card">
-      <h2>Games near your rating, by hour</h2>
-      <div class="rc-controls">
-        <label class="rc-field">Time control
-          <select id="q3-tc" data-draw="q3-tc"></select>
-        </label>
-        <label class="rc-field">Rating band (average of the two players)
-          <input type="number" class="rc-q3band" id="q3-band" min="400" max="3000" step="100">
-        </label>
-      </div>
-      <p class="rc-note">Games per hour in <span data-draw="q3-band-stat" data-stat="peak" data-field="year">—</span> where the two players averaged <span data-draw="q3-word" data-word="band">—</span>. Busiest at <b data-draw="q3-band-stat" data-stat="peak" data-field="hour">—</b> Pacific time with <b data-draw="q3-band-stat" data-stat="peak" data-field="games_per_hour">—</b> games an hour; quietest at <b data-draw="q3-band-stat" data-stat="low" data-field="hour">—</b> Pacific time with <b data-draw="q3-band-stat" data-stat="low" data-field="games_per_hour">—</b>.</p>
-      <div class="rc-chart dash-skeleton" id="q3-band-chart" data-draw="q3-band"></div>
-    </div>
-  </section>
-
   <!-- ============ Method ============ -->
   <section class="rc-page" id="method" hidden="">
     <div class="rc-prose">
@@ -442,12 +382,11 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 
 
 <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-<script src="rc-core.js?v=cdfac620e0bd"></script>
-<script src="rc-runtime.js?v=cdfac620e0bd"></script>
-<script src="rc-tabs.js?v=cdfac620e0bd"></script>
-<script src="rc-q1.js?v=cdfac620e0bd"></script>
-<script src="rc-q2.js?v=cdfac620e0bd"></script>
-<script src="rc-q3.js?v=cdfac620e0bd"></script>
+<script src="rc-core.js?v=544ab73b3989"></script>
+<script src="rc-runtime.js?v=544ab73b3989"></script>
+<script src="rc-tabs.js?v=544ab73b3989"></script>
+<script src="rc-q1.js?v=544ab73b3989"></script>
+<script src="rc-q2.js?v=544ab73b3989"></script>
 
 
 

@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 
-<title>Which chess openings survive? – David Nield</title>
+<title>Viable Openings – David Nield</title>
 <style>
 /* Default styles provided by pandoc.
 ** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
@@ -82,15 +82,15 @@ function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
 gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 </script>
-<link rel="stylesheet" href="filters.css?v=e693491db871">
+<link rel="stylesheet" href="../ratings/rc.css?v=cdfac620e0bd"><link rel="stylesheet" href="filters.css?v=1ba6ad2b925b">
 
 
 <link rel="stylesheet" href="../styles.css">
-<meta property="og:title" content="Which chess openings survive? – David Nield">
+<meta property="og:title" content="Viable Openings – David Nield">
 <meta property="og:description" content="Compare legal move orders through White’s third move with the openings people played on Lichess.">
 <meta property="og:site_name" content="David Nield">
 <meta property="og:locale" content="en_US">
-<meta name="twitter:title" content="Which chess openings survive? – David Nield">
+<meta name="twitter:title" content="Viable Openings – David Nield">
 <meta name="twitter:description" content="Compare legal move orders through White’s third move with the openings people played on Lichess.">
 <meta name="twitter:creator" content="@DRNield">
 <meta name="twitter:site" content="@DRNield">
@@ -119,15 +119,19 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="../openings/index.html"> 
-<span class="menu-text">Openings</span></a>
+<span class="menu-text">Opening Popularity</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link active" href="../opening-filters/index.html" aria-current="page"> 
-<span class="menu-text">Opening Filters</span></a>
+<span class="menu-text">Viable Openings</span></a>
+  </li>  
+  <li class="nav-item">
+    <a class="nav-link" href="../time-controls/index.html"> 
+<span class="menu-text">Time Controls Popularity</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="../ratings/index.html"> 
-<span class="menu-text">Ratings</span></a>
+<span class="menu-text">Time Control Rating Conversion</span></a>
   </li>  
   <li class="nav-item">
     <a class="nav-link" href="../files/resume.pdf"> 
@@ -150,7 +154,7 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 
 <header id="title-block-header" class="quarto-title-block default">
 <div class="quarto-title">
-<h1 class="title">Which chess openings survive?</h1>
+<h1 class="title">Viable Openings</h1>
 <p class="subtitle lead">Compare legal move orders through White’s third move with the openings people played on Lichess.</p>
 </div>
 
@@ -169,55 +173,46 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 
 
 <p>A line qualifies when every move stays within the allowed loss from the mover’s best legal choice and every position stays inside the evaluation band. Both sliders use pawns. A <strong>ply</strong> is one move by one player.</p>
-<section id="opening-filters" aria-label="Opening filters">
+<section id="opening-filters" class="rc" aria-label="Viable openings">
   <p id="of-status" role="status">Loading opening data…</p>
   <noscript>Enable JavaScript to explore the opening filters.</noscript>
-  <label class="form-label" for="of-source">Analysis source
-    <select class="form-select" id="of-source">
-      <option value="repertoire">Repertoire eval DB + Stockfish 19 fills · through ply 5</option>
-      <option value="cloud4">Lichess · depth 65 · 4 opening moves</option>
-      <option value="cloud20">Lichess · depth 32 · all 20 opening moves</option>
-      <option value="local">Stockfish 18 prototype · through ply 3</option>
-    </select>
-  </label>
-  <div class="of-filters">
-    <div class="of-filter">
-      <label class="form-label" for="of-loss">Maximum loss per move <output for="of-loss" id="of-loss-value"></output></label>
-      <div id="of-loss-ticks" class="of-ticks text-small tabular-nums" aria-hidden="true"></div>
-      <input id="of-loss" class="form-range" type="range" min="0" max="100" step="1" value="20">
-      <div id="of-loss-odds" class="of-ticks text-small tabular-nums" aria-hidden="true"></div>
-      <div id="of-loss-note" class="text-small text-muted"></div>
+  <div class="rc-grid of-filters">
+    <div class="rc-card of-filter">
+      <label class="of-label" for="of-loss">Maximum loss per move <output for="of-loss" id="of-loss-value"></output></label>
+      <div id="of-loss-ticks" class="of-ticks rc-note tabular-nums" aria-hidden="true"></div>
+      <input id="of-loss" type="range" min="0" max="100" step="1" value="20">
+      <div id="of-loss-odds" class="of-ticks rc-note tabular-nums" aria-hidden="true"></div>
+      <div id="of-loss-note" class="rc-note"></div>
     </div>
-    <div class="of-filter">
-      <label class="form-label" for="of-band">Evaluation band around zero <output for="of-band" id="of-band-value"></output></label>
-      <div id="of-band-ticks" class="of-ticks text-small tabular-nums" aria-hidden="true"></div>
-      <input id="of-band" class="form-range" type="range" min="0" max="100" step="1" value="100">
-      <div id="of-band-odds" class="of-ticks text-small tabular-nums" aria-hidden="true"></div>
-      <div id="of-band-note" class="text-small text-muted"></div>
+    <div class="rc-card of-filter">
+      <label class="of-label" for="of-band">Evaluation band around zero <output for="of-band" id="of-band-value"></output></label>
+      <div id="of-band-ticks" class="of-ticks rc-note tabular-nums" aria-hidden="true"></div>
+      <input id="of-band" type="range" min="0" max="100" step="1" value="100">
+      <div id="of-band-odds" class="of-ticks rc-note tabular-nums" aria-hidden="true"></div>
+      <div id="of-band-note" class="rc-note"></div>
     </div>
   </div>
   <div>
-    <p class="text-small text-muted" id="of-count-note">Percentages use all legal possibilities at the indicated ply. A move order counts as played when a game followed that exact sequence. A position counts if a game reached it by any move order at the same ply.</p>
-    <p class="text-small" id="of-coverage" hidden="">Only 4 of the 20 legal first moves have scores in this source. The filtered counts include only moves confirmed to meet both filters.</p>
+    <p class="rc-note" id="of-count-note">Percentages use all legal possibilities at the indicated ply. A move order counts as played when a game followed that exact sequence. A position counts if a game reached it by any move order at the same ply.</p>
     <div class="of-count-tables" id="of-tables"></div>
-    <p class="text-small" id="of-changes"></p>
-    <p id="of-first" class="text-small" aria-live="polite"></p>
   </div>
-  <div>
-    <div class="viz-row">
-      <h3 id="of-lines-title">Move orders that meet both filters</h3>
-      <select id="of-sample-ply" class="form-select" aria-label="Ply for move orders">
+  <section class="rc-card">
+    <div class="of-lines-heading">
+      <h2 id="of-lines-title">Move orders that meet both filters</h2>
+      <label class="rc-field">Show move orders after
+      <select id="of-sample-ply">
         <option value="1">After 1. White</option>
         <option value="2">After 1… Black</option>
         <option value="3">After 2. White</option>
         <option value="4">After 2… Black</option>
         <option value="5" selected="">After 3. White</option>
       </select>
+      </label>
     </div>
-    <div class="text-small text-muted" id="of-line-count"><span aria-live="polite" id="of-line-total"></span> · Game counts are for the exact moves shown.</div>
-    <div id="of-scroll" tabindex="0" role="region" aria-labelledby="of-lines-title">
+    <div class="rc-note" id="of-line-count"><span aria-live="polite" id="of-line-total"></span> · Game counts are for the exact moves shown.</div>
+    <div id="of-scroll" class="rc-table-box" tabindex="0" role="region" aria-labelledby="of-lines-title">
       
-<table class="table table-sm caption-top">
+<table class="rc-table caption-top">
 <colgroup>
 <col style="width: 25%">
 <col style="width: 25%">
@@ -226,16 +221,16 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 </colgroup>
 <thead id="of-sort">
 <tr class="header">
-<th data-quarto-table-cell-role="th" scope="col"><button type="button" class="btn btn-sm" data-sort="pgn" aria-label="Sort by PGN">
+<th data-quarto-table-cell-role="th" scope="col"><button type="button" data-sort="pgn" aria-label="Sort by PGN">
 PGN <span aria-hidden="true">↕</span>
 </button></th>
-<th class="text-end" data-quarto-table-cell-role="th" scope="col"><button type="button" class="btn btn-sm" data-sort="loss" aria-label="Sort by Largest move loss">
+<th class="text-end" data-quarto-table-cell-role="th" scope="col"><button type="button" data-sort="loss" aria-label="Sort by Largest move loss">
 Largest move loss <span aria-hidden="true">↕</span>
 </button></th>
-<th class="text-end" data-quarto-table-cell-role="th" scope="col"><button type="button" class="btn btn-sm" data-sort="cp" aria-label="Sort by Final eval (White)">
+<th class="text-end" data-quarto-table-cell-role="th" scope="col"><button type="button" data-sort="cp" aria-label="Sort by Final eval (White)">
 Final eval (White) <span aria-hidden="true">↕</span>
 </button></th>
-<th class="text-end" data-quarto-table-cell-role="th" scope="col"><button type="button" class="btn btn-sm" data-sort="games" aria-label="Sort by Lichess games">
+<th class="text-end" data-quarto-table-cell-role="th" scope="col"><button type="button" data-sort="games" aria-label="Sort by Lichess games">
 Lichess games <span aria-hidden="true">↕</span>
 </button></th>
 </tr>
@@ -245,13 +240,13 @@ Lichess games <span aria-hidden="true">↕</span>
 </table>
 
     </div>
-  </div>
-  <p class="text-small text-muted" id="of-source-note"></p>
-  <details>
+  </section>
+  <p class="rc-note">Evaluations come from the repertoire database. Stockfish 19 filled missing scores at 100,000 nodes per position. Win percentages use its full-material model. Game counts cover rated, non-tournament standard games on Lichess from January 2013 through July 2026, excluding known bots.</p>
+  <details class="rc-card of-estimates">
     <summary>How far does the tree grow at the widest settings?</summary>
-    <p class="text-small" id="of-estimate-note">Maximum move loss 1.00 pawn · evaluation band ±1.00. Counts are exact through ply 5. Plies 6–8 use 256 sampled continuations from qualifying five-ply move orders.</p>
-    <div class="table-responsive">
-<table class="table table-sm caption-top" aria-label="Widest-setting move-order estimates" aria-describedby="of-estimate-note">
+    <p class="rc-note" id="of-estimate-note">Maximum move loss 1.00 pawn · evaluation band ±1.00. Counts are exact through ply 5. Plies 6–8 use 256 sampled continuations from qualifying five-ply move orders.</p>
+    <div class="rc-table-box">
+<table class="rc-table caption-top" aria-label="Widest-setting move-order estimates" aria-describedby="of-estimate-note">
 <thead>
 <tr class="header">
 <th data-quarto-table-cell-role="th" scope="col">Ply</th>
@@ -264,9 +259,10 @@ Lichess games <span aria-hidden="true">↕</span>
 </tbody>
 </table>
 </div>
-    <p class="text-small" id="of-workload"></p>
-    <div class="table-responsive">
-<table class="table table-sm caption-top" aria-label="Stockfish fill estimates">
+    <p class="rc-note" id="of-changes"></p>
+    <p class="rc-note" id="of-workload"></p>
+    <div class="rc-table-box">
+<table class="rc-table caption-top" aria-label="Stockfish fill estimates">
 <thead>
 <tr class="header">
 <th data-quarto-table-cell-role="th" scope="col">Ply</th>
@@ -279,10 +275,10 @@ Lichess games <span aria-hidden="true">↕</span>
 </tbody>
 </table>
 </div>
-    <p class="text-small text-muted">Ply 6 has an exact count of outstanding evaluations. Plies 7 and 8 use 64 sampled walks, weighting each missing position by the number of qualifying routes to it and accounting for earlier fills. Times cover additional engine work at each ply. <span id="of-rate"></span></p>
+    <p class="rc-note">Ply 6 has an exact count of outstanding evaluations. Plies 7 and 8 use 64 sampled walks, weighting each missing position by the number of qualifying routes to it and accounting for earlier fills. Times cover additional engine work at each ply. <span id="of-rate"></span></p>
   </details>
 </section>
-<script defer="" src="filters.js?v=e951dff2cae9"></script>
+<script defer="" src="filters.js?v=590d9c9d227e"></script>
 
 
 

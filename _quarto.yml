@@ -25,11 +25,13 @@ website:
       - href: index.qmd
       - text: Blog
         href: blog.qmd
-      - text: Openings
+      - text: Opening Popularity
         href: openings/index.qmd
-      - text: Opening Filters
+      - text: Viable Openings
         href: opening-filters/index.qmd
-      - text: Ratings
+      - text: Time Controls Popularity
+        href: time-controls/index.qmd
+      - text: Time Control Rating Conversion
         href: ratings/index.qmd
       - text: Resume
         href: files/resume.pdf

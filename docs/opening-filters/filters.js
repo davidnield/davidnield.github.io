@@ -41,10 +41,6 @@
     gameCounts[i]=value;
   }
   if(offset!==extra.length) throw new Error("Incomplete opening data");
-  const cloud = {
-    cloud4: [["c4",19],["e4",17],["Nf3",14],["d4",13]],
-    cloud20: [["Nf3",36],["d4",29],["c4",24],["g3",21],["e4",18],["e3",12],["c3",3],["Nc3",0],["b3",-2],["a3",-4],["h3",-6],["d3",-10],["a4",-19],["b4",-20],["f4",-25],["h4",-31],["Nh3",-46],["Na3",-52],["f3",-55],["g4",-97]]
-  };
   const after = ["1. White","1… Black","2. White","2… Black","3. White"];
   const marks = [0,25,50,75,100];
   const percent = new Intl.NumberFormat("en-US",{style:"percent",maximumFractionDigits:2});
@@ -90,17 +86,13 @@
   function ticks(id,fn) {
     el(id).replaceChildren(...marks.map(v => tag("span",fn(v))));
   }
-  function prepare(source) {
-    const limited = Object.hasOwn(cloud,source);
-    const scores = source === "local" ? data.sf : data.cache;
-    const cloudScores = new Map(cloud[source] || []);
-    const firstEdges = data.layers[0].filter(row => !limited || cloudScores.has(row[1]));
-    const layers = limited ? [firstEdges] : data.layers;
-    const rootScore = limited ? Math.max(...cloudScores.values()) : scores[data.root];
+  function prepare() {
+    const scores = data.cache;
+    const rootScore = scores[data.root];
     let previous = null;
-    const prepared=layers.map((edges,ply) => {
+    const prepared=data.layers.map((edges,ply) => {
       const sign = ply % 2 ? -1 : 1;
-      const cp = edges.map(([,san,id]) => limited ? cloudScores.get(san) : scores[id]);
+      const cp = edges.map(([, ,id]) => scores[id]);
       const best = new Map();
       edges.forEach(([parent],i) => best.set(parent,Math.max(best.get(parent) ?? -Infinity, sign*cp[i])));
       const moves = edges.map(([parent,san,id,games],i) => {
@@ -113,22 +105,20 @@
       previous = moves;
       return {moves};
     });
-    if(source==="repertoire") {
-      const starts=new Uint32Array(groups.length+1);
-      groups.forEach((n,i)=>starts[i+1]=starts[i]+n);
-      const moves=[];
-      let route=0;
-      for(const prefix of previous) {
-        if(prefix.loss>meta.cap || prefix.band>meta.cap) continue;
-        for(let i=starts[prefix.id];i<starts[prefix.id+1];i++) {
-          const id=child[i], cp=childScore[id], san=meta.san[replies[i]];
-          moves.push({id,san,cp,loss:Math.max(prefix.loss,cp-bestReply[prefix.id]),
-            band:Math.max(prefix.band,Math.abs(cp)),pgn:prefix.pgn+" "+san,games:gameCounts[route++]});
-        }
+    const starts=new Uint32Array(groups.length+1);
+    groups.forEach((n,i)=>starts[i+1]=starts[i]+n);
+    const moves=[];
+    let route=0;
+    for(const prefix of previous) {
+      if(prefix.loss>meta.cap || prefix.band>meta.cap) continue;
+      for(let i=starts[prefix.id];i<starts[prefix.id+1];i++) {
+        const id=child[i], cp=childScore[id], san=meta.san[replies[i]];
+        moves.push({id,san,cp,loss:Math.max(prefix.loss,cp-bestReply[prefix.id]),
+          band:Math.max(prefix.band,Math.abs(cp)),pgn:prefix.pgn+" "+san,games:gameCounts[route++]});
       }
-      if(route!==meta.orders) throw new Error("Incomplete move orders");
-      prepared.push({moves});
     }
+    if(route!==meta.orders) throw new Error("Incomplete move orders");
+    prepared.push({moves});
     for(const layer of prepared) {
       layer.moves.slice().sort((a,b)=>alphabetical.compare(a.pgn,b.pgn)).forEach((line,index)=>line.rank=index);
     }
@@ -145,7 +135,6 @@
   });
   legalTotals.push({orders:197281,positions:meta.positions,playedOrders:meta.playedOrders,
     playedPositions:{size:meta.playedPositions,has:id=>(playedBits[id>>3] & (1<<(id&7)))!==0}});
-  const sources = new Map();
   const grid=new Uint32Array(gridBytes.buffer);
   let num5,parent5,games5,moves5,loss5,band5,eval5,ranks5;
   function installRows(packed,n) {
@@ -167,7 +156,7 @@
   installRows(fifthBytes,five.n);
   function fifthRanks() {
     if(!ranks5) {
-      const parents=sources.get("repertoire")[3].moves;
+      const parents=layers[3].moves;
       const sanRanks=Array(five.san.length);
       five.san.map((s,i)=>[s,i]).sort((a,b)=>alphabetical.compare(a[0],b[0]))
         .forEach((entry,rank)=>sanRanks[entry[1]]=rank);
@@ -176,12 +165,12 @@
     return ranks5;
   }
   function fifthLine(i) {
-    return {pgn:sources.get("repertoire")[3].moves[parent5[i]].pgn+" 3. "+five.san[moves5[i]],
+    return {pgn:layers[3].moves[parent5[i]].pgn+" 3. "+five.san[moves5[i]],
       loss:loss5[i],cp:eval5[i],games:games5[i]};
   }
   function makeCountTable(title) {
-    const section=tag("section"), heading=tag("h3",title);
-    const table=tag("table",undefined,"table table-sm");
+    const section=tag("section",undefined,"rc-card"), heading=tag("h2",title);
+    const table=tag("table",undefined,"rc-table");
     table.setAttribute("aria-label",title);
     table.setAttribute("aria-describedby","of-count-note");
     const row=table.createTHead().insertRow();
@@ -190,7 +179,7 @@
       th.scope="col";
       row.append(th);
     }
-    const wrapper=tag("div",undefined,"table-responsive");
+    const wrapper=tag("div",undefined,"rc-table-box");
     wrapper.append(table);
     section.append(heading,wrapper);
     el("tables").append(section);
@@ -212,6 +201,8 @@
   }
   const columns = ["pgn","loss","cp","games"];
   const alphabetical = new Intl.Collator("en",{numeric:true});
+  const layers = prepare();
+  const bestOpening = Math.max(...layers[0].moves.map(move => move.cp));
   const sortButtons = [...el("sort").querySelectorAll("button")];
   let sortKey="games", descending=true, visibleLines=[], sorted=[], rowHeight=30, startRow=-1;
   let showingFive=false,totalFive=0;
@@ -280,12 +271,7 @@
     sizeLineTable();
   }
   function render() {
-    const source = el("source").value;
-    el("changes").hidden=source!=="repertoire";
-    if (!sources.has(source)) sources.set(source,prepare(source));
-    const layers = sources.get(source);
     const loss = Number(el("loss").value), band = Number(el("band").value);
-    const bestOpening = Math.max(...layers[0].moves.map(x=>x.cp));
     el("loss-value").textContent = pawns(loss)+" pawns";
     el("band-value").textContent = "±"+pawns(band)+" pawns";
     for(const id of ["loss","band"]) el(id).setAttribute("aria-valuetext",el(id+"-value").textContent);
@@ -294,7 +280,6 @@
     el("loss-note").textContent="White win chance at the first-move cutoff · "+win(bestOpening-loss);
     el("band-note").textContent="Favored side’s win chance at the band edge · "+win(band);
     const kept = layers.map(layer=>layer.moves.filter(x=>x.loss<=loss && x.band<=band));
-    el("coverage").hidden=source!=="cloud4";
     orderTable.replaceChildren(...kept.map((lines,i)=>
       countRow(i,legalTotals[i].orders,lines.length,legalTotals[i].playedOrders,lines.filter(x=>x.games>0).length)));
     positionTable.replaceChildren(...kept.map((lines,i)=>{
@@ -303,20 +288,12 @@
       const qualifyingPlayed=[...ids].filter(id=>playedPositions.has(id)).length;
       return countRow(i,positions,ids.size,playedPositions.size,qualifyingPlayed);
     }));
-    const opening=kept[0].slice().sort((x,y)=>y.cp-x.cp);
-    el("first").textContent="First moves that meet both filters (White’s evaluation) · "+(opening.map(x=>x.san+" ("+signed(x.cp)+")").join(", ") || "None");
-    const plySelect=el("sample-ply");
-    const maxPly=source==="repertoire"?5:layers.length;
-    if(maxPly===5){
-      const index=(loss*101+band)*4;
-      totalFive=grid[index];
-      orderTable.append(countRow(4,4865609,totalFive,five.playedOrders,grid[index+1]));
-      positionTable.append(countRow(4,822518,grid[index+2],five.playedPositions,grid[index+3]));
-    }
-    for (const option of plySelect.options) option.disabled=Number(option.value)>maxPly;
-    const ply=Math.min(preferredPly,maxPly);
-    plySelect.value=String(ply);
-    plySelect.disabled=layers.length===1;
+    const index=(loss*101+band)*4;
+    totalFive=grid[index];
+    orderTable.append(countRow(4,4865609,totalFive,five.playedOrders,grid[index+1]));
+    positionTable.append(countRow(4,822518,grid[index+2],five.playedPositions,grid[index+3]));
+    const ply=preferredPly;
+    el("sample-ply").value=String(ply);
     showingFive=ply===5;
     if(showingFive){
       const matches=new Uint32Array(Math.min(totalFive,num5));
@@ -326,19 +303,11 @@
       visibleLines=matches.subarray(0,n);
     } else visibleLines=kept[ply-1];
     showLines();
-    const notes={
-      repertoire:"Repertoire eval DB, including stored outliers. Missing scores use Stockfish 19 at 100,000 nodes. Each move is compared with every legal sibling.",
-      local:"Stockfish 18, 25,000 nodes per position.",
-      cloud4:"Lichess depth 65. Counts cover the four scored first moves.",
-      cloud20:"Lichess depth 32. All 20 first moves scored."
-    };
-    el("source-note").textContent=notes[source]+" Lichess counts cover rated, non-tournament standard games from January 2013 through July 2026, excluding known bots. Win scales use the Stockfish 19 full-material model.";
   }
   let preferredPly=5;
   const savedCp = (v,fallback) => Number.isInteger(v) && v>=0 ? Math.min(v,meta.cap) : fallback;
   function restore(snapshot) {
     const s=snapshot?.modelContent;
-    el("source").value=["local","cloud4","cloud20","repertoire"].includes(s?.source) ? s.source : "repertoire";
     el("loss").value=s?.version===2 ? savedCp(s.lossCp,20) : 20;
     el("band").value=s?.version===2 ? savedCp(s.bandCp,100) : 100;
     preferredPly=[1,2,3,4,5].includes(s?.samplePly) ? s.samplePly : 5;
@@ -347,7 +316,7 @@
     render();
   }
   function persist() {
-    const state = {version:2,source:el("source").value,lossCp:Number(el("loss").value),
+    const state = {version:2,lossCp:Number(el("loss").value),
       bandCp:Number(el("band").value),samplePly:preferredPly,sortKey,descending};
     try {localStorage.setItem("dnield-opening-filters", JSON.stringify(state));} catch {}
   }
@@ -355,7 +324,6 @@
     el(id).addEventListener("input",render);
     el(id).addEventListener("change",persist);
   }
-  el("source").addEventListener("change",()=>{render();persist();});
   el("sample-ply").addEventListener("change",()=>{preferredPly=Number(el("sample-ply").value);render();persist();});
   for (const button of sortButtons) button.addEventListener("click",()=>{
     const key=button.dataset.sort;

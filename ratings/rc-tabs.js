@@ -1,8 +1,9 @@
 // Tabs and the controls whose choices are fixed.
 (() => {
-  const TABS = ['convert', 'timecontrols', 'queues', 'method'];
-  const tab = () => (TABS.includes(RC.params().tab) ? RC.params().tab : 'convert');
   const all = (sel) => document.querySelectorAll(sel);
+
+  const pages = [...all('section.rc-page')];
+  const conversion = pages.some(page => page.id === 'convert');
 
   all('.rc-tabs [data-tab]').forEach((b) => b.addEventListener('click', () => dash.setParams({tab: b.dataset.tab})));
 
@@ -36,10 +37,20 @@
   });
 
   dash.onData(() => {
-    const t = tab();
     const p = RC.params();
+    if (conversion && p.tab === 'queues') {
+      // Old ratings bookmarks can include the queue's category, year and rating band.
+      const target = new URL('../time-controls/', location.href);
+      target.search = location.search;
+      const params = new URLSearchParams(location.hash.slice(1));
+      params.delete('tab');
+      target.hash = params.toString();
+      location.replace(target);
+      return;
+    }
+    const t = pages.find(page => page.id === p.tab)?.id || pages[0].id;
     all('.rc-tabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === t)));
-    all('section.rc-page').forEach((s) => { s.hidden = s.id !== t; });
+    pages.forEach((s) => { s.hidden = s.id !== t; });
     all('.rc-from').forEach((s) => { s.value = p.from; });
     all('.rc-to').forEach((s) => { s.value = p.to; });
     all('.rc-rating-range').forEach((r) => { r.value = RC.snap(p.rating, 25); });
@@ -53,3 +64,13 @@
     all('[data-swatch-color]').forEach((s) => { s.style.color = RC.swatch(s.dataset.swatchColor, p); });
   });
 })();
+
+// Method: total games counted, from the monthly queue table.
+dash.draw('corpus', (el) => {
+  const rows = RC.rows('q3_monthly');
+  if (!rows) { el.textContent = '—'; return; }
+  const months = rows.map((r) => r.month).sort();
+  const f = el.dataset.field;
+  el.textContent = f === 'games' ? d3.format(',')(d3.sum(rows, (r) => r.games))
+    : RC.monthName(f === 'first' ? months[0] : months[months.length - 1]);
+});

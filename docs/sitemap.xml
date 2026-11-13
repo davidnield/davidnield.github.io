@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://dnield.com/ratings/index.html</loc>
-    <lastmod>2026-10-30T23:46:47.727Z</lastmod>
+    <lastmod>2026-11-13T20:00:33.979Z</lastmod>
   </url>
   <url>
     <loc>https://dnield.com/openings/index.html</loc>
@@ -22,6 +22,10 @@
   </url>
   <url>
     <loc>https://dnield.com/opening-filters/index.html</loc>
-    <lastmod>2026-11-13T19:38:07.006Z</lastmod>
+    <lastmod>2026-11-13T19:56:56.637Z</lastmod>
+  </url>
+  <url>
+    <loc>https://dnield.com/time-controls/index.html</loc>
+    <lastmod>2026-11-13T20:00:33.980Z</lastmod>
   </url>
 </urlset>

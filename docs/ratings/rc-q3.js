@@ -244,13 +244,3 @@
       .on('pointerleave', () => tt.hide());
   });
 })();
-
-// Method: total games counted, from the monthly queue table.
-dash.draw('corpus', (el) => {
-  const rows = RC.rows('q3_monthly');
-  if (!rows) { el.textContent = '—'; return; }
-  const months = rows.map((r) => r.month).sort();
-  const f = el.dataset.field;
-  el.textContent = f === 'games' ? d3.format(',')(d3.sum(rows, (r) => r.games))
-    : RC.monthName(f === 'first' ? months[0] : months[months.length - 1]);
-});

@@ -12,6 +12,7 @@
 // A redraw follows any data arriving, any selection change and any change of page width.
 (() => {
   const VERSION = document.querySelector('meta[name="rc-version"]')?.content || "dev";
+  const assetBase = document.currentScript.src;
   const DEFAULTS = window.RC_DEFAULTS || {};
 
   // dataset id -> file. Pair and grid files are named by their categories.
@@ -21,7 +22,7 @@
     if (id.startsWith("q2m:")) return `data/q2/${id.slice(4)}.csv`;
     return `data/${id}.csv`;
   }
-  const url = (path) => new URL(`${path}?v=${VERSION}`, document.baseURI).href;
+  const url = (path) => new URL(`${path}?v=${VERSION}`, assetBase).href;
   const fileSafe = (s) => s.replace(/[^A-Za-z0-9]+/g, "_");
 
   const sources = new Map();

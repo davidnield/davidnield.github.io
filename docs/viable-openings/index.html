@@ -82,7 +82,7 @@ function gtag(){dataLayer.push(arguments);}
 gtag('js', new Date());
 gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 </script>
-<link rel="stylesheet" href="../ratings/rc.css?v=cdfac620e0bd"><link rel="stylesheet" href="filters.css?v=1ba6ad2b925b">
+<link rel="stylesheet" href="../ratings/rc.css?v=cdfac620e0bd"><link rel="stylesheet" href="filters.css?v=77d8ad317001">
 
 
 <link rel="stylesheet" href="../styles.css">
@@ -199,7 +199,13 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
   <section class="rc-card">
     <div class="of-lines-heading">
       <h2 id="of-lines-title">Move orders that meet both filters</h2>
-      <label class="rc-field">Show move orders after
+      <div class="rc-controls">
+      <fieldset class="of-view">
+        <legend class="visually-hidden">Table view</legend>
+        <label><input type="radio" name="of-view" value="orders" checked=""><span>Move orders</span></label>
+        <label><input type="radio" name="of-view" value="positions"><span>Positions</span></label>
+      </fieldset>
+      <label class="rc-field"><span id="of-ply-label">Show move orders after</span>
       <select id="of-sample-ply">
         <option value="1">After 1. White</option>
         <option value="2">After 1… Black</option>
@@ -208,11 +214,12 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
         <option value="5" selected="">After 3. White</option>
       </select>
       </label>
+      </div>
     </div>
-    <div class="rc-note" id="of-line-count"><span aria-live="polite" id="of-line-total"></span> · Game counts are for the exact moves shown.</div>
+    <div class="rc-note" id="of-line-count"><span aria-live="polite" id="of-line-total"></span> · <span id="of-line-note">Game counts are for the exact moves shown.</span></div>
     <div id="of-scroll" class="rc-table-box" tabindex="0" role="region" aria-labelledby="of-lines-title">
       
-<table class="rc-table caption-top">
+<table class="rc-table caption-top" aria-labelledby="of-lines-title" aria-describedby="of-line-note">
 <colgroup>
 <col style="width: 25%">
 <col style="width: 25%">
@@ -224,8 +231,8 @@ gtag('config', 'G-EZ5WZFDWDZ', { 'anonymize_ip': true});
 <th data-quarto-table-cell-role="th" scope="col"><button type="button" data-sort="pgn" aria-label="Sort by PGN">
 PGN <span aria-hidden="true">↕</span>
 </button></th>
-<th class="text-end" data-quarto-table-cell-role="th" scope="col"><button type="button" data-sort="loss" aria-label="Sort by Largest move loss">
-Largest move loss <span aria-hidden="true">↕</span>
+<th class="text-end" data-quarto-table-cell-role="th" scope="col"><button type="button" data-sort="loss">
+<span id="of-loss-heading">Largest move loss</span> <span aria-hidden="true">↕</span>
 </button></th>
 <th class="text-end" data-quarto-table-cell-role="th" scope="col"><button type="button" data-sort="cp" aria-label="Sort by Final eval (White)">
 Final eval (White) <span aria-hidden="true">↕</span>
@@ -278,7 +285,7 @@ Lichess games <span aria-hidden="true">↕</span>
     <p class="rc-note">Ply 6 has an exact count of outstanding evaluations. Plies 7 and 8 use 64 sampled walks, weighting each missing position by the number of qualifying routes to it and accounting for earlier fills. Times cover additional engine work at each ply. <span id="of-rate"></span></p>
   </details>
 </section>
-<script defer="" src="filters.js?v=869c7e5b573f"></script>
+<script defer="" src="filters.js?v=f0ca1f6c3e19"></script>
 
 
 

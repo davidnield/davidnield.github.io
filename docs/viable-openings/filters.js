@@ -12,8 +12,8 @@
     const decoded = response.body.pipeThrough(new DecompressionStream("deflate"));
     return new Uint8Array(await new Response(decoded).arrayBuffer());
   }
-  const [baseBytes, extra, gridBytes, fifthBytes] = await Promise.all(
-    [assets.base, assets.fourth, assets.grid, assets.fifth].map(unpack)
+  const [baseBytes, extra, gridBytes, fifthBytes, positionBytes] = await Promise.all(
+    [assets.base, assets.fourth, assets.grid, assets.fifth, "positions-9d4ff8f88a7b.bin"].map(unpack)
   );
   const data=JSON.parse(new TextDecoder().decode(baseBytes));
   let offset=0;
@@ -136,21 +136,36 @@
   legalTotals.push({orders:197281,positions:meta.positions,playedOrders:meta.playedOrders,
     playedPositions:{size:meta.playedPositions,has:id=>(playedBits[id>>3] & (1<<(id&7)))!==0}});
   const grid=new Uint32Array(gridBytes.buffer);
+  function readPlanes(bytes, offset, n, width, Type=Uint32Array) {
+    const out=new Type(n);
+    for(let byte=0;byte<width;byte++) {
+      const start=offset+byte*n;
+      for(let i=0;i<n;i++) out[i]+=bytes[start+i]*2**(8*byte);
+    }
+    return out;
+  }
+  // Fifth-ply position IDs are dense among positions reachable at the widest settings.
+  const positions5=grid[grid.length-2];
+  const idOffset=4*meta.positions, gamesOffset=idOffset+3*five.n;
+  if(positionBytes.length!==gamesOffset+4*positions5) throw new Error("Incomplete position data");
+  const id5=readPlanes(positionBytes,idOffset,five.n,3);
+  const positionGames5=readPlanes(positionBytes,gamesOffset,positions5,4);
+  const positionGames=data.layers.map(edges=>{
+    const totals=new Float64Array(meta.groups);
+    for(const [, ,id,games] of edges) totals[id]+=games;
+    return totals;
+  });
+  positionGames.push(readPlanes(positionBytes,0,meta.positions,4));
   let num5,parent5,games5,moves5,loss5,band5,eval5,ranks5;
   function installRows(packed,n) {
     if(packed.length!==12*n || grid.length!==4*101*101) throw new Error("Incomplete fifth-ply data");
     // Column planes keep repeated prefixes and sparse exact game counts compact.
     num5=n;
-    function planes(offset,width,Type) {
-      const out=new Type(n);
-      for(let byte=0;byte<width;byte++) for(let i=0;i<n;i++) out[i]+=packed[(offset+byte)*n+i]*2**(8*byte);
-      return out;
-    }
-    parent5=planes(0,3,Uint32Array);
-    moves5=planes(3,2,Uint16Array);
+    parent5=readPlanes(packed,0,n,3);
+    moves5=readPlanes(packed,3*n,n,2,Uint16Array);
     loss5=packed.subarray(5*n,6*n);band5=packed.subarray(6*n,7*n);
     eval5=new Int8Array(packed.buffer,packed.byteOffset+7*n,n);
-    games5=planes(8,4,Uint32Array);
+    games5=readPlanes(packed,8*n,n,4);
     ranks5=null;
   }
   installRows(fifthBytes,five.n);
@@ -166,7 +181,7 @@
   }
   function fifthLine(i) {
     return {pgn:layers[3].moves[parent5[i]].pgn+" 3. "+five.san[moves5[i]],
-      loss:loss5[i],cp:eval5[i],games:games5[i]};
+      loss:loss5[i],cp:eval5[i],games:positionView ? positionGames5[id5[i]] : games5[i]};
   }
   function makeCountTable(title) {
     const section=tag("section",undefined,"rc-card"), heading=tag("h2",title);
@@ -204,8 +219,52 @@
   const layers = prepare();
   const bestOpening = Math.max(...layers[0].moves.map(move => move.cp));
   const sortButtons = [...el("sort").querySelectorAll("button")];
+  const viewInputs = [...root.querySelectorAll('input[name="of-view"]')];
+  let positionView=false;
   let sortKey="games", descending=true, visibleLines=[], sorted=[], rowHeight=30, startRow=-1;
   let showingFive=false,totalFive=0;
+  function preferRoute(loss,games,rank,otherLoss,otherGames,otherRank) {
+    if(loss!==otherLoss) return loss<otherLoss;
+    if(games!==otherGames) return games>otherGames;
+    return rank<otherRank;
+  }
+  function distinctLines(lines,ply) {
+    const best=new Map();
+    for(const line of lines) {
+      const other=best.get(line.id);
+      if(!other || preferRoute(line.loss,line.games,line.rank,other.loss,other.games,other.rank)) best.set(line.id,line);
+    }
+    return Array.from(best.values(),line=>({...line,games:positionGames[ply-1][line.id]}));
+  }
+  function fifthMatches(loss,band,expected) {
+    const matches=new Uint32Array(expected);
+    let count=0;
+    if(positionView) {
+      const best=new Int32Array(positions5).fill(-1);
+      const ranks=fifthRanks();
+      for(let i=0;i<num5;i++) {
+        if(loss5[i]>loss || band5[i]>band) continue;
+        const id=id5[i], other=best[id];
+        if(other<0 || preferRoute(loss5[i],games5[i],ranks[i],loss5[other],games5[other],ranks[other])) best[id]=i;
+      }
+      for(const row of best) if(row>=0) matches[count++]=row;
+    } else {
+      for(let i=0;i<num5;i++) if(loss5[i]<=loss && band5[i]<=band) matches[count++]=i;
+    }
+    if(count!==expected) throw new Error("Table and filter totals disagree");
+    return matches;
+  }
+  function updateViewLabels() {
+    const noun=positionView ? "positions" : "move orders";
+    el("lines-title").textContent=(positionView ? "Positions" : "Move orders")+" that meet both filters";
+    el("ply-label").textContent="Show "+noun+" after";
+    const lossLabel=positionView ? "Min(Largest move loss)" : "Largest move loss";
+    el("loss-heading").textContent=lossLabel;
+    el("loss-heading").parentElement.setAttribute("aria-label","Sort by "+lossLabel);
+    el("line-note").textContent=positionView
+      ? "The PGN minimizes the largest move loss among qualifying routes to the position. Ties favor the most-played move order, then the first PGN alphabetically. Game counts include all routes to the position at this ply."
+      : "Game counts are for the exact moves shown.";
+  }
   function spacer(height) {
     const row=tag("tr",undefined,"of-spacer"),cell=tag("td");
     row.setAttribute("aria-hidden","true");
@@ -235,7 +294,7 @@
     }
     if(end<sorted.length) body.append(spacer(Math.max(0,physicalHeight-top-(end-start)*rowHeight)));
     if(!sorted.length) {
-      const row=tag("tr"),cell=tag("td","No move orders meet both filters at this ply.");
+      const row=tag("tr"),cell=tag("td","No "+(positionView?"positions":"move orders")+" meet both filters at this ply.");
       cell.colSpan=4;row.append(cell);body.append(row);
     }
     el("lines").replaceChildren(body);
@@ -252,7 +311,11 @@
   function showLines() {
     if(showingFive){
       const ranks=fifthRanks(), values={pgn:ranks,loss:loss5,cp:eval5,games:games5}[sortKey];
-      sorted=visibleLines.slice().sort((a,b)=>(descending?values[b]-values[a]:values[a]-values[b]) || ranks[a]-ranks[b]);
+      const byPositionGames=positionView && sortKey==="games";
+      sorted=visibleLines.slice().sort((a,b)=>{
+        const diff=byPositionGames ? positionGames5[id5[a]]-positionGames5[id5[b]] : values[a]-values[b];
+        return (descending ? -diff : diff) || ranks[a]-ranks[b];
+      });
     } else sorted=visibleLines.slice().sort((a,b)=>{
       const diff=sortKey==="pgn" ? a.rank-b.rank : a[sortKey]-b[sortKey];
       return (descending ? -diff : diff) || a.rank-b.rank;
@@ -262,10 +325,10 @@
       const active=button.dataset.sort===sortKey;
       if (active) button.parentElement.setAttribute("aria-sort",descending?"descending":"ascending");
       else button.parentElement.removeAttribute("aria-sort");
-      button.querySelector("span").textContent=active ? (descending ? "↓" : "↑") : "↕";
+      button.querySelector('[aria-hidden="true"]').textContent=active ? (descending ? "↓" : "↑") : "↕";
     }
     el("line-total").textContent=
-      num.format(sorted.length)+(sorted.length===1?" move order":" move orders");
+      num.format(sorted.length)+(positionView?" position":" move order")+(sorted.length===1?"":"s");
     el("scroll").scrollTop=0;
     drawWindow(true);
     sizeLineTable();
@@ -295,13 +358,8 @@
     const ply=preferredPly;
     el("sample-ply").value=String(ply);
     showingFive=ply===5;
-    if(showingFive){
-      const matches=new Uint32Array(Math.min(totalFive,num5));
-      let n=0;
-      for(let i=0;i<num5;i++) if(loss5[i]<=loss && band5[i]<=band) matches[n++]=i;
-      if(n!==totalFive) throw new Error("Move-order and filter totals disagree");
-      visibleLines=matches.subarray(0,n);
-    } else visibleLines=kept[ply-1];
+    if(showingFive) visibleLines=fifthMatches(loss,band,positionView ? grid[index+2] : totalFive);
+    else visibleLines=positionView ? distinctLines(kept[ply-1],ply) : kept[ply-1];
     showLines();
   }
   let preferredPly=5;
@@ -313,13 +371,16 @@
       input.value=Number.isInteger(saved) && saved>=0 ? Math.min(saved,meta.cap) : input.defaultValue;
     }
     preferredPly=[1,2,3,4,5].includes(s?.samplePly) ? s.samplePly : 5;
+    positionView=s?.view==="positions";
+    viewInputs.find(input=>input.value===(positionView?"positions":"orders")).checked=true;
+    updateViewLabels();
     sortKey=columns.includes(s?.sortKey) ? s.sortKey : "games";
     descending=typeof s?.descending==="boolean" ? s.descending : sortKey==="games";
     render();
   }
   function persist() {
     const state = {version:2,lossCp:Number(el("loss").value),
-      bandCp:Number(el("band").value),samplePly:preferredPly,sortKey,descending};
+      bandCp:Number(el("band").value),samplePly:preferredPly,view:positionView?"positions":"orders",sortKey,descending};
     try {localStorage.setItem("dnield-opening-filters", JSON.stringify(state));} catch {}
   }
   for(const id of ["loss","band"]){
@@ -327,6 +388,12 @@
     el(id).addEventListener("change",persist);
   }
   el("sample-ply").addEventListener("change",()=>{preferredPly=Number(el("sample-ply").value);render();persist();});
+  for(const input of viewInputs) input.addEventListener("change",()=>{
+    positionView=input.value==="positions";
+    updateViewLabels();
+    render();
+    persist();
+  });
   for (const button of sortButtons) button.addEventListener("click",()=>{
     const key=button.dataset.sort;
     descending=key===sortKey ? !descending : key==="games" || key==="cp";

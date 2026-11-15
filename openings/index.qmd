@@ -7,7 +7,7 @@ format:
   html:
     # dash.css is linked with the release version (cache-busting), not via `css:`
     include-in-header:
-      text: '<link rel="stylesheet" href="dash.css?v=5c094bbcf53d">'
+      text: '<link rel="stylesheet" href="dash.css?v=ad641553228c">'
     toc: false
     page-layout: full
     anchor-sections: false
@@ -40,7 +40,7 @@ second question: if you always play the line, you get it whenever your *opponent
 // release stamped by python/stamp_release.py, so a deploy never mixes with a
 // browser's cached copy of the previous release (GitHub Pages sends max-age=600,
 // and module caches can outlive it).
-VERSION = "5c094bbcf53d"
+VERSION = "ad641553228c"
 asset = (path) => new URL(`${path}?v=${VERSION}`, document.baseURI).href
 dashMod = import(asset("dash.js"))
 boardMod = import(asset("board.js"))
@@ -48,6 +48,7 @@ controlsMod = import(asset("controls.js"))
 exportMod = import(asset("export.js"))
 makeStore = dashMod.makeStore
 toPlain = dashMod.toPlain
+toPlainCompare = dashMod.toPlainCompare
 monthDate = dashMod.monthDate
 monthLabel = dashMod.monthLabel
 createBoard = boardMod.createBoard
@@ -71,6 +72,12 @@ ITALIAN = ["e4", "e5", "Nf3", "Nc6", "Bc4"]
 //   metric=results opens panel 1 on Win percentage and is written only then: Popularity is the default;
 //   zoom=score opens Win percentage on "Score only (zoomed)", is written only then, and is ignored without metric=results)
 // (#opening=<id> from v1 links still works: it sets the board to that line)
+// v1.9, the Compare tab:
+//   #moves=e4,c5,Nf3,Nc6,Bb5&tab=compare&a.speeds=Bullet,Blitz&a.bands=0,1000&b.speeds=Rapid&b.bands=2000,2200,2500
+//   tab=compare opens the Compare tab and is written only while it is selected (links without tab= open on Explore).
+//   a.speeds / a.bands / b.speeds / b.bands set Set A and Set B, each written only when it differs from the
+//   default (Set A: all speeds, bands 0/1000/1200/1400, i.e. under 1600; Set B: all speeds, bands 2000/2200/2500).
+//   speeds= / bands= stay Explore's filters; moves, from/to and smooth are shared by both tabs.
 hashParams = new URLSearchParams(location.hash.slice(1))
 hashList = (k) => hashParams.has(k) ? hashParams.get(k).split(",").filter(Boolean) : null
 monthIndex = (s) => {
@@ -85,6 +92,94 @@ DEFAULT_FROM = monthIndex("2017-01") ?? 0
 hashMonth = (k, dflt) => monthIndex(hashParams.get(k)) ?? dflt
 fromDefault = (hashMonth("to", M - 1) < DEFAULT_FROM) ? 0 : DEFAULT_FROM
 initialMoves = hashList("moves") ?? (hashParams.has("opening") ? ix.byId.get(+hashParams.get("opening"))?.moves : null) ?? ITALIAN
+// v1.9: the Compare tab's two filter sets (owner's defaults: under 1600 vs 2000+, all speeds)
+DEFAULT_A = ({ speeds: ix.speeds, bands: [0, 1000, 1200, 1400] })
+DEFAULT_B = ({ speeds: ix.speeds, bands: [2000, 2200, 2500] })
+SET = ({ a: "#0b0b0b", b: "#1baf7a" })   // Set A ink, Set B aqua (White and Black keep #2a78d6 / #eb6834)
+hashSet = (k, D0) => ({
+  speeds: hashList(`${k}.speeds`)?.filter((s) => ix.speeds.includes(s)) ?? D0.speeds,
+  bands: hashList(`${k}.bands`)?.map(Number).filter((b) => ix.bands.includes(b)) ?? D0.bands })
+// One set's row on the Compare tab: a colour swatch, its name, and its own Speed and Rating dropdowns
+// (controls.js). .value = { speeds, bands }; an "input" event fires on every change.
+setControl = (name, color, init) => {
+  const row = document.createElement("div");
+  row.className = "dash-set";
+  row.setAttribute("role", "group");
+  row.setAttribute("aria-label", `${name} filters`);
+  const lab = document.createElement("span");
+  lab.className = "dash-set-k";
+  lab.innerHTML = `<span class="dash-swatch" style="background:${color}" aria-hidden="true"></span>${name}`;
+  const sp = multiSelect({ label: "Speed", options: ix.speeds, value: init.speeds });
+  const bd = multiSelect({ label: "Rating", options: ix.bands, value: init.bands,
+    format: (b) => ix.band_labels[ix.bands.indexOf(b)], summary: bandSummary(ix.bands, ix.band_labels) });
+  row.append(lab, sp, bd);
+  const upd = () => { row.value = { speeds: sp.value, bands: bd.value }; };
+  sp.addEventListener("input", upd);   // runs before the event bubbles to the row's own listeners
+  bd.addEventListener("input", upd);
+  upd();
+  return row;
+}
+```
+
+```{ojs}
+// v1.9: Explore | Compare. An ARIA tablist like the ratings page's (dnield.com/ratings), keyboard
+// operable: Tab reaches the selected tab, the arrow keys, Home and End move and select.
+viewof tab = {
+  const nav = document.createElement("div");
+  nav.className = "dash-tabs";
+  nav.setAttribute("role", "tablist");
+  nav.setAttribute("aria-label", "Dashboard views");
+  const btns = [["explore", "Explore"], ["compare", "Compare"]].map(([id, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.id = `dash-tab-${id}`;
+    b.dataset.tab = id;
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-controls", `dash-${id}`);
+    b.textContent = label;
+    nav.appendChild(b);
+    return b;
+  });
+  const show = (id, focus) => btns.forEach((b) => {
+    const on = b.dataset.tab === id;
+    b.setAttribute("aria-selected", String(on));
+    b.tabIndex = on ? 0 : -1;
+    if (on && focus) b.focus();
+  });
+  const set = (id, focus) => {
+    show(id, focus);
+    if (nav.value === id) return;
+    nav.value = id;
+    nav.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  btns.forEach((b) => b.addEventListener("click", () => set(b.dataset.tab, false)));
+  nav.addEventListener("keydown", (e) => {
+    const i = btns.findIndex((b) => b.dataset.tab === nav.value), n = btns.length;
+    const j = { ArrowRight: (i + 1) % n, ArrowLeft: (i - 1 + n) % n, Home: 0, End: n - 1 }[e.key];
+    if (j === undefined) return;
+    e.preventDefault();
+    set(btns[j].dataset.tab, true);
+  });
+  nav.value = hashParams.get("tab") === "compare" ? "compare" : "explore";
+  show(nav.value, false);
+  return nav;
+}
+```
+
+```{ojs}
+//| output: false
+// Which tab shows: a class on <body> (dash.css hides the other tab's panel, Explore's Speed and Rating
+// cells on Compare and the set rows on Explore), and the tab panels' ARIA roles.
+{
+  document.body.classList.toggle("dash-tab-compare", tab === "compare");
+  for (const id of ["explore", "compare"]) {
+    const el = document.getElementById(`dash-${id}`);
+    if (!el) continue;
+    el.setAttribute("role", "tabpanel");
+    el.setAttribute("aria-labelledby", `dash-tab-${id}`);
+    el.hidden = (id === "compare") !== (tab === "compare");
+  }
+}
 ```
 
 ::: {.dash-filters}
@@ -97,6 +192,14 @@ viewof speeds = multiSelect({ label: "Speed", options: ix.speeds,
 viewof bands = multiSelect({ label: "Rating", options: ix.bands,
   value: hashList("bands")?.map(Number).filter((b) => ix.bands.includes(b)) ?? ix.bands,
   format: (b) => ix.band_labels[ix.bands.indexOf(b)], summary: bandSummary(ix.bands, ix.band_labels) })
+```
+
+```{ojs}
+viewof setA = setControl("Set A", SET.a, hashSet("a", DEFAULT_A))
+```
+
+```{ojs}
+viewof setB = setControl("Set B", SET.b, hashSet("b", DEFAULT_B))
 ```
 
 ```{ojs}
@@ -147,6 +250,25 @@ viewof line = createBoard({ Chess: ChessLib.Chess, moves: initialMoves, pieceBas
 ```{ojs}
 {
   if (offTree) return D(`<p class="dash-note">No explorer data here: this position is outside the named-opening tree.</p>`);
+  if (tab === "compare") {
+    // v1.9, Compare: each move's share of the games continuing from here, in Set A and in Set B
+    const [ea, eb] = await Promise.all([store.explorer(res.line.node, setA.speeds, setA.bands, m0, m1),
+      store.explorer(res.line.node, setB.speeds, setB.bands, m0, m1)]);
+    const fmt = d3.format(",");
+    const byB = new Map(eb.rows.map((r) => [r.san, r]));
+    const rowsC = ea.rows.map((r) => ({ san: r.san, a: r, b: byB.get(r.san) }))
+      .sort((x, y) => (y.a.n + (y.b?.n ?? 0)) - (x.a.n + (x.b?.n ?? 0)));
+    const cell = (r) => r ? `<td class="num" title="${fmt(r.n)} games">${pct(r.share)}</td>` : `<td class="num">—</td>`;
+    const body = rowsC.map((r) => `<tr><td><button type="button" class="dash-mv" data-san="${esc(r.san)}">${esc(r.san)}</button></td>
+        ${cell(r.a)}${cell(r.b)}</tr>`).join("")
+      + (ea.T || eb.T ? `<tr class="other"><td>other moves</td><td class="num">${pct(ea.other_share)}</td><td class="num">${pct(eb.other_share)}</td></tr>` : "");
+    const d = D(`<table class="dash-ex dash-ex-cmp"><thead><tr><th>Move</th><th class="num">${key(SET.a)} Share in A</th><th class="num">${key(SET.b)} Share in B</th></tr></thead>
+      <tbody>${body || `<tr><td colspan="3" class="dash-note">No continuations in the data for these sets.</td></tr>`}</tbody></table>
+      <div class="dash-note">${fmt(ea.T)} games in Set A and ${fmt(eb.T)} in Set B continued from this position (${monthLabel(ix, m0)}–${monthLabel(ix, m1)}).
+      Each share is of that set's games. Moves listed are those leading to another position in the named-opening tree; "other moves" is everything else.</div>`);
+    d.querySelectorAll("button[data-san]").forEach((b) => b.addEventListener("click", () => viewof line.setLine([...line, b.dataset.san])));
+    return d;
+  }
   const ex = await store.explorer(res.line.node, speeds, bands, m0, m1);
   const rowsEx = [...ex.rows].sort((a, b) => b.n - a.n);
   const fmt = d3.format(",");
@@ -280,6 +402,13 @@ lineText = (moves) => moves.length ? ix.pgn(moves) : "the start position"
   if (metric1 === "Win percentage") p.set("metric", "results");
   if (zoom1) p.set("zoom", "score");
   if (view2 === "Levels") p.set("view", "levels");
+  // v1.9: the Compare tab (only while selected) and its two sets (each only when it differs from the default)
+  if (tab === "compare") p.set("tab", "compare");
+  const same = (x, y) => x.length === y.length && x.every((v) => y.includes(v));
+  for (const [k, S, D0] of [["a", setA, DEFAULT_A], ["b", setB, DEFAULT_B]]) {
+    if (!same(S.speeds, D0.speeds)) p.set(`${k}.speeds`, S.speeds.join(","));
+    if (!same(S.bands, D0.bands)) p.set(`${k}.bands`, S.bands.join(","));
+  }
   history.replaceState(null, "", "#" + p.toString().replace(/%2C/g, ","));
 }
 // What a chart describes, for its PNG export. The panels follow the line up
@@ -329,12 +458,16 @@ xTicks = (P, w, ml) => P && !P.legacy ? { ticks: Math.max(2, Math.floor((w - ml 
     out.explorer = await store.explorer(r.line.node, sp, bd, a, b);
     return out;
   };
+  // v1.9: the Compare tab's numbers (sets A, B = { speeds, bands }) for gate 4's compare group
+  window.dashCompare = async (moves, A, B, a, b, sm) => toPlainCompare(await store.compare(moves, A, B, a, b, sm), a, b);
   window.dashIndex = ix;
   return true;
 }
 ```
 
 
+
+::: {#dash-explore .dash-tabpanel}
 
 ```{ojs}
 res.cnt ? html`` : D(`<p class="dash-callout">Make a move on the board (or pick a named opening) to see its popularity, who drives it, and how often each side meets it.</p>`)
@@ -753,4 +886,321 @@ The data cover the positions on the named lines and every move between two of th
 the results of the games that reach a named opening's final position by any move order, counted from White's side. Board: chess.js (BSD-2-Clause).
 Chess pieces by Colin M.L. Burnett (Cburnett), via Wikimedia Commons, used under the BSD licence
 ([licence and sources](pieces/LICENSE.txt)).
+:::
+
+:::
+
+::: {#dash-compare .dash-tabpanel}
+
+```{ojs}
+//| output: false
+// ---- v1.9, the Compare tab: the line under Set A and Set B, drawn in the same charts ----
+// Nothing here computes or draws while Explore is selected.
+cmpOn = tab === "compare"
+cmp = cmpOn ? store.compare(line, setA, setB, m0, m1, smooth) : null
+cmpReady = !!(cmp && cmp.ser)
+CMP_SET_KEYS = ["W", "B", "WxB", "reach", "reach_lo", "reach_hi", "score", "score_lo", "score_hi", "res_n", "win_w", "win_d", "win_b",
+  "spec_edge_white", "spec_edge_white_lo", "spec_edge_white_hi", "spec_edge_black", "spec_edge_black_lo", "spec_edge_black_hi"]
+cmpRows = cmpReady ? d3.range(m0, m1 + 1).map((m) => {
+  const r = { m, date: monthDate(ix, m), label: monthLabel(ix, m) };
+  const fin = (x) => (Number.isFinite(x) ? x : NaN);
+  for (const k of CMP_SET_KEYS) { r[`a_${k}`] = fin(cmp.a.ser[k][m]); r[`b_${k}`] = fin(cmp.b.ser[k][m]); }
+  for (const k of dashMod.COMPARE_KEYS) r[k] = fin(cmp.ser[k][m]);
+  return r;
+}) : []
+gw = cmpReady ? cmp.win : ({})
+wa = cmpReady ? cmp.a.win : ({})
+wb = cmpReady ? cmp.b.win : ({})
+speedText = (sp) => sp.length === ix.speeds.length ? "all speeds" : sp.length ? sp.join(" + ") : "no speeds"
+bandText = (bd) => {
+  if (bd.length === ix.bands.length) return "all ratings";
+  if (!bd.length) return "no ratings";
+  const s = bandSummary(ix.bands, ix.band_labels)(bd, ix.bands).replace(/^Rating: /, "");
+  if (/^under \d+$/.test(s)) return `<${s.slice(6)}`;
+  if (/ bands$/.test(s)) return ix.bands.filter((b) => bd.includes(b)).map((b) => ix.band_labels[ix.bands.indexOf(b)]).join(", ");
+  return s;
+}
+setDesc = (S) => `${speedText(S.speeds)}, ${bandText(S.bands)}`
+setsLine = `A: ${setDesc(setA)} · B: ${setDesc(setB)}`
+cmpPopNote = `Lichess rated standard games (no arena/swiss, no bots), ${monthLabel(ix, m0)}–${monthLabel(ix, m1)}. `
+  + `Set A: ${setDesc(setA)}; Set B: ${setDesc(setB)}. ` + (smooth === 3 ? "Monthly, counts pooled over 3 months." : "Monthly.")
+// a Compare chart's PNG export: as Explore's, with both sets named in the subtitle and the footer
+cmpSpec = (panel, panelSlug, build, legend, footNote) => ({
+  build, legend,
+  title: `${chartName.title} — ${panel}`,
+  subtitle: `${setsLine}. ${chartName.subtitle}`,
+  footer: footNote ? `${cmpPopNote} ${footNote}` : cmpPopNote,
+  source: "Source: dnield.com/openings · Lichess open database",
+  filename: `opening_${chartName.slug}_${panelSlug}_${monthLabel(ix, m0)}_${monthLabel(ix, m1)}.png`,
+})
+// B vs A from a log gap: a ratio ("2.30×") or a log-percent change ("+40%")
+xr = (t) => Number.isFinite(t) ? times2(Math.exp(t)) : "—"
+gapPct = (t) => {
+  if (!Number.isFinite(t)) return "—";
+  const r = Math.round(100 * (Math.exp(t) - 1));
+  return r === 0 ? "0%" : `${r > 0 ? "+" : ""}${d3.format(",")(r)}%`;
+}
+ctile = (k, v, s, color) => `<div class="dash-tile"><div class="k">${color ? key(color) : ""}${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`
+// a chart's place taken by a note, with its Download disabled (as Explore's "not available" state)
+noteBox = (msg, why) => {
+  const box = chartWithDownload(D(`<p class="dash-callout dash-unavail">${msg}</p>`), () => null);
+  const b = box.querySelector(".dash-dl");
+  b.disabled = true; b.classList.add("off"); b.title = why;
+  return box;
+}
+setLegend = (extra = "") => `<div class="dash-legend"><span>${key(SET.a, "thick")} Set A: ${esc(setDesc(setA))}</span>
+  <span>${key(SET.b, "thick")} Set B: ${esc(setDesc(setB))}</span>${extra}</div>`
+setLegendExport = (extra = []) => [{ label: `Set A: ${setDesc(setA)}`, color: SET.a, kind: "line" },
+  { label: `Set B: ${setDesc(setB)}`, color: SET.b, kind: "line" }, ...extra]
+// on-screen y ticks for the gap chart: at most this many (exports use their own budget)
+thinScreen = (P, L, k = 8) => P && !P.legacy ? yMax(P, L) : k
+```
+
+```{ojs}
+{
+  if (!cmpOn) return html``;
+  const parts = [`<p class="dash-sub">One opening under two filter sets, drawn in the same charts:
+    <b>Set A</b> (${esc(setDesc(setA))}, ink) and <b>Set B</b> (${esc(setDesc(setB))}, aqua). Choose each set's speeds and
+    ratings above; the line, the window and the pooling are shared with Explore.</p>`];
+  if (!cmpReady) parts.push(`<p class="dash-callout">Make a move on the board (or pick a named opening) to compare it between the two sets.</p>`);
+  else if (cmp.same) parts.push(`<p class="dash-callout dash-same"><b>The two sets are the same</b>, so there is no gap between them to show.
+    Change Set A's or Set B's speeds or ratings above.</p>`);
+  else if (cmp.overlap) {
+    const sp = setA.speeds.filter((s) => setB.speeds.includes(s)), bd = setA.bands.filter((b) => setB.bands.includes(b));
+    parts.push(`<p class="dash-callout dash-overlap"><b>The sets overlap:</b> games at ${esc(speedText(sp))}, ${esc(bandText(bd))} count in
+      both, so the two sets share games. The gap between them is smaller than between separate groups would be, and the 95% intervals,
+      which treat the sets as independent, are only approximate.</p>`);
+  }
+  for (const [nm, S] of [["Set A", setA], ["Set B", setB]])
+    if (cmpReady && (!S.speeds.length || !S.bands.length)) parts.push(`<p class="dash-callout dash-empty">${nm} selects no games: choose at least one speed and one rating band.</p>`);
+  return D(parts.join(""));
+}
+```
+
+::: {.dash-cpanel}
+## 1 · How popular is it, A vs B?
+
+```{ojs}
+//| output: false
+cchart1 = (w, h, P) => { const L = plotLayout(P, h, w, { hDefault: 300, mlBanner: 68, mlK: 4.9 }); return Plot.plot({
+  width: w, ...L,
+  x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)], ...xTicks(P, w, L.marginLeft) },
+  y: { type: "log", label: "share of games (true reach)", tickFormat: tickPct, grid: true,
+       ticks: thin(logTicks(cmpRows.flatMap((d) => [d.a_reach_lo, d.a_reach_hi, d.b_reach_lo, d.b_reach_hi])), yMax(P, L)) },
+  marks: [
+    Plot.areaY(cmpRows, { x: "date", y1: "a_reach_lo", y2: "a_reach_hi", fill: SET.a, fillOpacity: 0.12, curve: "monotone-x" }),
+    Plot.areaY(cmpRows, { x: "date", y1: "b_reach_lo", y2: "b_reach_hi", fill: SET.b, fillOpacity: 0.2, curve: "monotone-x" }),
+    Plot.lineY(cmpRows, { x: "date", y: "a_reach", stroke: SET.a, strokeWidth: 2, curve: "monotone-x" }),
+    Plot.lineY(cmpRows, { x: "date", y: "b_reach", stroke: SET.b, strokeWidth: 2, curve: "monotone-x" }),
+    Plot.ruleX(cmpRows, Plot.pointerX({ x: "date", stroke: COL.muted, strokeWidth: 1 })),
+    Plot.tip(cmpRows, Plot.pointerX({ x: "date", y: "b_reach",
+      title: (d) => `${d.label}\nA  ${pct(d.a_reach)}  (${pct(d.a_reach_lo)}–${pct(d.a_reach_hi)})\nB  ${pct(d.b_reach)}  (${pct(d.b_reach_lo)}–${pct(d.b_reach_hi)})\nB ÷ A  ${xr(d.gap_net)}  (${xr(d.gap_net_lo)}–${xr(d.gap_net_hi)})` })),
+  ],
+}) }
+```
+
+```{ojs}
+{
+  if (!cmpReady) return html``;
+  const r = Math.exp(gw.gap_net);
+  const head = cmp.same ? ctile("B vs A, true reach", "the same sets", "Set A and Set B select the same games", null)
+    : ctile("B vs A, true reach", !Number.isFinite(r) ? "—" : r >= 1 ? `${times2(r)} more common` : `${times2(1 / r)} rarer`,
+      `in B than in A over this window (B ÷ A = ${xr(gw.gap_net)}, 95% interval ${xr(gw.gap_net_lo)}–${xr(gw.gap_net_hi)}, the sets treated as independent)`, null);
+  const tiles = [ctile("Set A", pct(wa.reach), `${oneIn(wa.reach)} games · ${esc(setDesc(setA))}`, SET.a),
+    ctile("Set B", pct(wb.reach), `${oneIn(wb.reach)} games · ${esc(setDesc(setB))}`, SET.b), head];
+  const box = chartWithDownload(cchart1(Math.max(240, Math.min(width, 1100))), () => cmpSpec("How popular is it, A vs B?", "compare-popularity",
+    (w, h, P) => cchart1(w, h, P), setLegendExport([{ label: "95% interval", color: COL.muted, kind: "area" }]),
+    "True reach: the share of games that reach the position by any move order. B ÷ A interval by the delta method, the sets treated as independent."));
+  return html`${D(`<div class="dash-tiles">${tiles.join("")}</div>${setLegend(`<span>shaded: 95% interval</span>`)}`)}${box}
+  <div class="dash-note">${cmpPopNote}</div>
+  <p class="dash-copy">Over this window the position is reached in <b>${pct(wa.reach)}</b> of Set A's games and <b>${pct(wb.reach)}</b>
+  of Set B's: B ÷ A = <b>${xr(gw.gap_net)}</b>.</p>`;
+}
+```
+:::
+
+::: {.dash-cpanel}
+## 2 · Who explains the gap?
+
+```{ojs}
+//| output: false
+// B vs A per month, split exactly: White's part gap_W = log(W_B/W_A) and Black's gap_B = log(B_B/B_A)
+// stack to the net gap_WxB = log(WxB_B/WxB_A). The same log-percent axis as panel 2's Attribution view.
+cchart2 = (w, h, P) => {
+  const L = plotLayout(P, h, w, { hDefault: 300, mlBanner: 68, mlK: 4.1 });
+  const long = cmpRows.flatMap((d) => [
+    { date: d.date, side: "W", v: d.gap_W },   // "W"/"B", not "White"/"Black" (Plot reads those as colours)
+    { date: d.date, side: "B", v: d.gap_B },
+  ]).filter((d) => Number.isFinite(d.v));
+  const ext = d3.extent([...long.map((d) => d.v), ...cmpRows.map((d) => d.gap_WxB).filter(Number.isFinite),
+    ...cmpRows.map((d) => Math.max(0, d.gap_W) + Math.max(0, d.gap_B)).filter(Number.isFinite),
+    ...cmpRows.map((d) => Math.min(0, d.gap_W) + Math.min(0, d.gap_B)).filter(Number.isFinite), 0]);
+  const cands = [-0.99, -0.98, -0.95, -0.9, -0.8, -0.75, -0.6, -0.5, -0.33, -0.2, -0.1, 0, 0.1, 0.25, 0.5, 1, 1.5, 2, 3, 4, 9, 19, 49, 99];
+  const slack = P && !P.legacy ? 0 : 0.05;
+  const ticks = cands.map((p) => Math.log(1 + p)).filter((t) => t >= ext[0] - slack && t <= ext[1] + slack);
+  // a gap between two sets can span a wide range, where the candidates crowd around 0: keep 0, then walk
+  // outwards keeping only ticks at least 1/(k-1) of the range apart (k = the tick budget)
+  const minGap = 0.9 * (ext[1] - ext[0]) / Math.max(1, thinScreen(P, L) - 1);
+  const walk = (side) => { const out = []; let last = 0;
+    for (const t of side) if (Math.abs(t - last) >= minGap) { out.push(t); last = t; }
+    return out; };
+  const spaced = [...walk(ticks.filter((t) => t < 0).sort((a, b) => b - a)).reverse(), ...(ticks.includes(0) ? [0] : []),
+    ...walk(ticks.filter((t) => t > 0).sort((a, b) => a - b))];
+  return Plot.plot({
+    width: w, ...L,
+    x: { type: "utc", label: null, domain: [monthDate(ix, m0), d3.utcMonth.offset(monthDate(ix, m1), 1)], ...xTicks(P, w, L.marginLeft) },
+    y: { label: "B vs A (log scale)", ticks: spaced, tickFormat: gapPct, grid: true },
+    color: { domain: ["W", "B"], range: [COL.white, COL.black] },
+    marks: [
+      Plot.rectY(long, { x: "date", interval: "month", y: "v", fill: "side", order: ["W", "B"], insetLeft: 0.5, insetRight: 0.5, fillOpacity: 0.9 }),
+      Plot.ruleY([0], { stroke: COL.ink, strokeOpacity: 0.4 }),
+      Plot.lineY(cmpRows, { x: (d) => d3.utcDay.offset(d.date, 14), y: "gap_WxB", stroke: COL.ink, strokeWidth: 1.5 }),
+      Plot.ruleX(cmpRows, Plot.pointerX({ x: (d) => d3.utcDay.offset(d.date, 14), stroke: COL.muted, strokeWidth: 1 })),
+      Plot.tip(cmpRows, Plot.pointerX({ x: (d) => d3.utcDay.offset(d.date, 14), y: "gap_WxB",
+        title: (d) => `${d.label}  (B vs A)\nNet, W×B  ${gapPct(d.gap_WxB)}   A ${pct(d.a_WxB)} · B ${pct(d.b_WxB)}\nWhite (W)  ${gapPct(d.gap_W)}   A ${pct(d.a_W)} · B ${pct(d.b_W)}\nBlack (B)  ${gapPct(d.gap_B)}   A ${pct(d.a_B)} · B ${pct(d.b_B)}\n(log parts add: ${d.gap_W?.toFixed(3)} + ${d.gap_B?.toFixed(3)} = ${d.gap_WxB?.toFixed(3)})` })),
+    ],
+  });
+}
+```
+
+```{ojs}
+{
+  if (!cmpReady) return html``;
+  const legend = `<div class="dash-legend"><span>${key(COL.white, "box")} White's moves (W)</span><span>${key(COL.black, "box")} Black's moves (B)</span>
+    <span>${key(COL.ink)} Net: W×B in B vs A</span></div>`;
+  const sub = `<p class="dash-sub">How much more (or less) common this move order is in Set B than in Set A, month by month:
+    +40% means 40% more common in B. A bar above zero means that side's moves make the line more common in B.
+    On a log scale White's part and Black's part add up exactly to the net, with no interaction left over.</p>`;
+  if (cmp.same)
+    return html`${D(sub + legend)}${noteBox("The two sets are the same, so there is no gap to split. Change Set A or Set B above.",
+      "Nothing to download: the two sets are the same")}<div class="dash-note">${cmpPopNote}</div>`;
+  const box = chartWithDownload(cchart2(Math.max(240, Math.min(width, 1100))), () => cmpSpec("Who explains the gap? (B vs A)", "compare-gap",
+    (w, h, P) => cchart2(w, h, P), [
+      { label: "White's moves (W)", color: COL.white, kind: "box" },
+      { label: "Black's moves (B)", color: COL.black, kind: "box" },
+      { label: "Net: W×B in B vs A (log scale; the parts add exactly)", color: COL.ink, kind: "line" }],
+    "B vs A: White's part log(W_B / W_A) plus Black's part log(B_B / B_A) is the net log(W×B_B / W×B_A) exactly; +40% means 40% more common in B."));
+  return html`${D(sub + legend)}${box}<div class="dash-note">${cmpPopNote}</div>
+  <p class="dash-copy">Over this window this move order is <b>${xr(gw.gap_WxB)}</b> as common in B as in A (W×B ${pct(wa.WxB)} vs ${pct(wb.WxB)});
+  White's moves account for <b>×${Number.isFinite(gw.gap_W) ? times2(Math.exp(gw.gap_W)).replace("×", "") : "—"}</b>, Black's for
+  <b>×${Number.isFinite(gw.gap_B) ? times2(Math.exp(gw.gap_B)).replace("×", "") : "—"}</b> (the two multiply to the net exactly).
+  By true reach, any move order, it is ${xr(gw.gap_net)}.</p>`;
+}
+```
+:::
+
+::: {.dash-cpanel}
+## 3 · How does it score, A vs B?
+
+```{ojs}
+//| output: false
+// both sets' average score on the zoomed score axis of v1.7.1, fitted to both sets' visible bands
+cScoreDomain = {
+  const v = cmpRows.flatMap((d) => [d.a_score_lo, d.a_score_hi, d.b_score_lo, d.b_score_hi]).filter(Number.isFinite);
+  const lo = v.length ? d3.min(v) : 0.5, hi = v.length ? d3.max(v) : 0.5, padY = 0.1 * (hi - lo);
+  let a = lo - padY, b = hi + padY;
+  if (b - a < 0.04) { const mid = (lo + hi) / 2; a = mid - 0.02; b = mid + 0.02; }
+  if (a < 0) { b = Math.min(1, b - a); a = 0; }
+  if (b > 1) { a = Math.max(0, a - (b - 1)); b = 1; }
+  return [a, b];
+}
+cScoreTicks = (k) => {
+  const [a, b] = cScoreDomain;
+  for (const st of [0.01, 0.02, 0.05, 0.1, 0.2]) {
+    const t = d3.range(Math.ceil(a / st - 1e-9), Math.floor(b / st + 1e-9) + 1).map((i) => +(i * st).toFixed(2));
+    if (t.length <= k || st === 0.2) return t;
+  }
+}
+cchart3 = (w, h, P) => { const L = plotLayout(P, h, w, { hDefault: 300, mlBanner: 68, mlK: 3.6 }); return Plot.plot({
+  width: w, ...L,
+  x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)], ...xTicks(P, w, L.marginLeft) },
+  y: { type: "linear", label: "average score (White's view)", domain: cScoreDomain, grid: true,
+       ticks: cScoreTicks(Math.min(6, yMax(P, L))), tickFormat: d3.format(".2f") },
+  marks: [
+    ...(cScoreDomain[0] <= 0.5 && 0.5 <= cScoreDomain[1] ? [
+      Plot.ruleY([0.5], { stroke: COL.muted, strokeWidth: 1, strokeDasharray: "4,3", ariaLabel: () => "even-rule" }),
+      Plot.text([0.5], { y: (d) => d, text: () => "even", frameAnchor: "right", textAnchor: "end", lineAnchor: "bottom", dy: -3,
+        fill: COL.prod, ariaLabel: () => "even-label" })] : []),
+    Plot.areaY(cmpRows, { x: "date", y1: "a_score_lo", y2: "a_score_hi", fill: SET.a, fillOpacity: 0.12, curve: "monotone-x" }),
+    Plot.areaY(cmpRows, { x: "date", y1: "b_score_lo", y2: "b_score_hi", fill: SET.b, fillOpacity: 0.2, curve: "monotone-x" }),
+    Plot.lineY(cmpRows, { x: "date", y: "a_score", stroke: SET.a, strokeWidth: 2.25, curve: "monotone-x" }),
+    Plot.lineY(cmpRows, { x: "date", y: "b_score", stroke: SET.b, strokeWidth: 2.25, curve: "monotone-x" }),
+    Plot.ruleX(cmpRows, Plot.pointerX({ x: "date", stroke: COL.muted, strokeWidth: 1 })),
+    Plot.tip(cmpRows, Plot.pointerX({ x: "date", y: "b_score",
+      title: (d) => `${d.label}\nA  ${sc(d.a_score)}  (${sc(d.a_score_lo)}–${sc(d.a_score_hi)})  ${games(d.a_res_n)} games\nB  ${sc(d.b_score)}  (${sc(d.b_score_lo)}–${sc(d.b_score_hi)})  ${games(d.b_res_n)} games` })),
+  ],
+}) }
+```
+
+```{ojs}
+{
+  if (!cmpReady) return html``;
+  if (!cmp.a.ser.hasResults)
+    return html`${noteBox(`Monthly results are available for the named openings' final positions. Enter or pick a named opening.`,
+      "Nothing to download: monthly results are available for the named openings' final positions")}<div class="dash-note">${cmpPopNote}</div>`;
+  const t = (nm, S, w, color) => ctile(`${nm}: average score`, sc(w.score),
+    `White ${pct(w.win_w)} · Draw ${pct(w.win_d)} · Black ${pct(w.win_b)} · ${games(w.res_n)} games`, color);
+  const box = chartWithDownload(cchart3(Math.max(240, Math.min(width, 1100))), () => cmpSpec("How does it score, A vs B?", "compare-score",
+    (w, h, P) => cchart3(w, h, P), setLegendExport([{ label: "95% interval on the score", color: COL.muted, kind: "area" }]), RESULTS_FOOT));
+  return html`${D(`<div class="dash-tiles">${t("Set A", setA, wa, SET.a)}${t("Set B", setB, wb, SET.b)}</div>${setLegend(`<span>shaded: 95% interval on the score</span>`)}`)}${box}
+  <div class="dash-note">${cmpPopNote} ${RESULTS_FOOT}</div>`;
+}
+```
+:::
+
+::: {.dash-cpanel}
+## 4 · Specialist edge, A vs B
+
+```{ojs}
+viewof persp4 = Inputs.select(["White", "Black"], { label: "Perspective", value: inTree % 2 || inTree === 0 ? "White" : "Black" })
+```
+
+```{ojs}
+//| output: false
+// the specialist edge (v1.8) in each set: White B ÷ W, Black W ÷ B, with an "equal" rule at 1×
+edgeKey4 = persp4 === "White" ? "spec_edge_white" : "spec_edge_black"
+edgeFmt = (d) => `${+(+d).toPrecision(3)}×`
+cchart4 = (w, h, P) => {
+  const L = plotLayout(P, h, w, { hDefault: 280, mlBanner: 76, mlK: 3.6 });
+  const k = edgeKey4;
+  // the domain covers the bands and 1x, padded 5% (log) each side, so the "equal" rule never sits on the frame
+  const vals = [1, ...cmpRows.flatMap((d) => [d[`a_${k}_lo`], d[`a_${k}_hi`], d[`b_${k}_lo`], d[`b_${k}_hi`]])].filter((x) => Number.isFinite(x) && x > 0);
+  const dom = [d3.min(vals) / 1.05, d3.max(vals) * 1.05];
+  return Plot.plot({
+    width: w, ...L,
+    x: { type: "utc", label: null, domain: [monthDate(ix, m0), monthDate(ix, m1)], ...xTicks(P, w, L.marginLeft) },
+    y: { type: "log", label: `${persp4} specialist edge (${persp4 === "White" ? "B ÷ W" : "W ÷ B"})`, grid: true, tickFormat: edgeFmt, domain: dom,
+         ticks: thin(logTicks(vals)?.filter((t) => t >= dom[0] && t <= dom[1]), yMax(P, L)) },
+    marks: [
+      Plot.ruleY([1], { stroke: COL.muted, strokeWidth: 1, strokeDasharray: "4,3", ariaLabel: () => "equal-rule" }),
+      Plot.text([1], { y: (d) => d, text: () => "equal", frameAnchor: "right", textAnchor: "end", lineAnchor: "bottom", dy: -3,
+        fill: COL.prod, ariaLabel: () => "equal-label" }),
+      Plot.areaY(cmpRows, { x: "date", y1: `a_${k}_lo`, y2: `a_${k}_hi`, fill: SET.a, fillOpacity: 0.12, curve: "monotone-x" }),
+      Plot.areaY(cmpRows, { x: "date", y1: `b_${k}_lo`, y2: `b_${k}_hi`, fill: SET.b, fillOpacity: 0.2, curve: "monotone-x" }),
+      Plot.lineY(cmpRows, { x: "date", y: `a_${k}`, stroke: SET.a, strokeWidth: 2.25, curve: "monotone-x" }),
+      Plot.lineY(cmpRows, { x: "date", y: `b_${k}`, stroke: SET.b, strokeWidth: 2.25, curve: "monotone-x" }),
+      Plot.ruleX(cmpRows, Plot.pointerX({ x: "date", stroke: COL.muted, strokeWidth: 1 })),
+      Plot.tip(cmpRows, Plot.pointerX({ x: "date", y: `b_${k}`,
+        title: (d) => `${d.label}\n${persp4} specialist edge\nA  ${times2(d[`a_${k}`])}\nB  ${times2(d[`b_${k}`])}` })),
+    ],
+  });
+}
+```
+
+```{ojs}
+{
+  if (!cmpReady) return html``;
+  const w = persp4 === "White", O = w ? "Black" : "White", k = edgeKey4;
+  const head = ctile(`${persp4} specialist edge (${w ? "B ÷ W" : "W ÷ B"})`, `${times2(wa[k])} in A, ${times2(wb[k])} in B`,
+    `how many times more often a ${persp4} specialist reaches this than a ${O} specialist, in each set`, null);
+  const box = chartWithDownload(cchart4(Math.max(240, Math.min(width, 1100))), () => cmpSpec(`${persp4} specialist edge, A vs B`, "compare-edge",
+    (w2, h, P) => cchart4(w2, h, P), setLegendExport([{ label: "95% interval", color: COL.muted, kind: "area" }]),
+    `Specialist edge: how many times more often a ${persp4} specialist (always plays ${persp4}'s moves of the line) reaches it than a ${O} specialist; ${w ? "B ÷ W" : "W ÷ B"}. Above 1× favours ${persp4}.`));
+  return html`${D(`<div class="dash-tiles">${head}</div>${setLegend(`<span>shaded: 95% interval</span>`)}`)}${box}
+  <p class="dash-sub">Above the dashed "equal" line, a ${persp4} specialist meets this more often than a ${O} specialist does.</p>
+  <div class="dash-note">${cmpPopNote}</div>`;
+}
+```
+:::
+
 :::

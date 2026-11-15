@@ -164,6 +164,47 @@ export function windowSummary(cnt, m0, m1) {
   return r;
 }
 
+// v1.9, the Compare tab: one line under two slice selections, Set A and Set B, each computed as
+// above; the between-set gap per month (pooled counts) and over the window (raw counts pooled):
+//   gap_W   = log(W_B / W_A)        White's moves
+//   gap_B   = log(B_B / B_A)        Black's moves
+//   gap_WxB = log(WxB_B / WxB_A)    the net of the two: gap_W + gap_B = gap_WxB (to rounding)
+//   gap_net = log(reach_B / reach_A), true reach; 95% interval gap_net -/+ Z95 sqrt(vR_A + vR_B),
+//             vR = 1/A - 1/N per set (the two sets treated as independent)
+// NaN where either set is suppressed (path keys: either set's W/B; gap_net: either set's reach).
+// Same operation order as python/build_opening_series.gap_metrics.
+export const COMPARE_KEYS = ["gap_W", "gap_B", "gap_WxB", "gap_net", "gap_net_lo", "gap_net_hi"];
+
+// a, b: { W, B, WxB, reach, N, A } for one month (or the window) of Set A and Set B
+export function gapAt(a, b) {
+  const net = Math.log(b.reach / a.reach);
+  const half = Z95 * Math.sqrt((1 / a.A - 1 / a.N) + (1 / b.A - 1 / b.N));
+  return {
+    gap_W: Math.log(b.W / a.W), gap_B: Math.log(b.B / a.B), gap_WxB: Math.log(b.WxB / a.WxB),
+    gap_net: net, gap_net_lo: net - half, gap_net_hi: net + half,
+  };
+}
+
+// Monthly gap series over the whole data range from two store.compute results (same line, same
+// smoothing): W, B, WxB, reach from each set's series, N and A pooled exactly as monthly() pools them.
+export function compareSeries(ra, rb, smooth) {
+  const NA = pool(ra.cnt.N, smooth), AA = pool(ra.cnt.A, smooth), NB = pool(rb.cnt.N, smooth), AB = pool(rb.cnt.A, smooth);
+  const M = NA.length, out = {};
+  for (const k of COMPARE_KEYS) out[k] = new Float64Array(M);
+  const at = (s, N, A, m) => ({ W: s.W[m], B: s.B[m], WxB: s.WxB[m], reach: s.reach[m], N: N[m], A: A[m] });
+  for (let m = 0; m < M; m++) {
+    const g = gapAt(at(ra.ser, NA, AA, m), at(rb.ser, NB, AB, m));
+    for (const k of COMPARE_KEYS) out[k][m] = g[k];
+  }
+  return out;
+}
+
+// Sets: { speeds: [...], bands: [...] }. The same = the same slice selection; they overlap when they
+// share at least one speed and one rating band (some games count in both).
+const sameMembers = (x, y) => x.length === y.length && x.every((v) => y.includes(v));
+export const sameSets = (A, B) => sameMembers(A.speeds, B.speeds) && sameMembers(A.bands, B.bands);
+export const setsOverlap = (A, B) => A.speeds.some((s) => B.speeds.includes(s)) && A.bands.some((b) => B.bands.includes(b));
+
 // Log-space attribution over the window (python/attribution.py): baseline =
 // geometric mean over the window's first 12 unsuppressed months.
 export function attribution(ser, m0, m1, baselineMonths = 12) {
@@ -295,6 +336,14 @@ export function makeStore(base, version = "") {
       const ser = monthly(cnt, smooth);
       return { line, cnt, ser, att: attribution(ser, m0, m1), win: windowSummary(cnt, m0, m1) };
     },
+    // v1.9, the Compare tab: the line under Set A and Set B, and the gap between them.
+    async compare(moves, A, B, m0, m1, smooth) {
+      const [a, b] = await Promise.all([store.compute(moves, A.speeds, A.bands, m0, m1, smooth),
+        store.compute(moves, B.speeds, B.bands, m0, m1, smooth)]);
+      const out = { line: a.line, a, b, same: sameSets(A, B), overlap: setsOverlap(A, B), ser: null, win: null };
+      if (a.cnt) { out.ser = compareSeries(a, b, smooth); out.win = gapAt(a.win, b.win); }
+      return out;
+    },
     // The explorer table at one position over months m0..m1 (selected slices):
     // each tree edge out of it with games and share of T, "other moves" =
     // T minus the stored edges, and all-time results for the selected slices.
@@ -329,4 +378,16 @@ export function toPlain(res, m0, m1) {
   for (const k of SERIES_KEYS) win[k] = f(res.win[k]);
   win.c = res.win.c.map(f);
   return { inTree: res.line.inTree, series, attribution: { c_W: res.att.c_W.map(f), c_B: res.att.c_B.map(f), c_total: res.att.c_total.map(f) }, window: win };
+}
+
+// v1.9: a store.compare result as plain JSON (gate 4's compare group): each set as toPlain gives it,
+// and the gap series and window values in a `compare` group.
+export function toPlainCompare(cmp, m0, m1) {
+  const f = (x) => (Number.isFinite(x) ? x : null);
+  const out = { inTree: cmp.line.inTree, same: cmp.same, overlap: cmp.overlap, a: toPlain(cmp.a, m0, m1), b: toPlain(cmp.b, m0, m1), compare: null };
+  if (!cmp.ser) return out;
+  const series = {}, win = {};
+  for (const k of COMPARE_KEYS) { series[k] = Array.from(cmp.ser[k].slice(m0, m1 + 1), f); win[k] = f(cmp.win[k]); }
+  out.compare = { series, window: win };
+  return out;
 }

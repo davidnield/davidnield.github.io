@@ -171,3 +171,30 @@ table.dash-ex tr.other td { color: var(--muted); }
   .dash-dl { padding: 0.3rem 0.6rem; }
   .dash-size { font-size: 0.85rem; padding: 0.3rem; }
 }
+
+/* ---- v1.9: Explore | Compare tabs (as the ratings page's tablist), Set A / Set B rows ---- */
+.dash-tabs { display: flex; flex-wrap: wrap; gap: 0.25rem; border-bottom: 1px solid var(--grid); margin: 0.75rem 0 0; }
+/* [role="tab"]: Quarto gives OJS buttons Bootstrap's .btn.btn-quarto, whose radius curled the underline (and left a hairline
+   ring in WebKit); this selector outranks it */
+.dash-tabs button[role="tab"] { appearance: none; background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0;
+  box-shadow: none; margin-bottom: -1px; padding: 0.5rem 0.75rem; min-height: 44px; font: inherit; line-height: 1.5; color: var(--ink-2); cursor: pointer; }
+.dash-tabs button[role="tab"]:hover { color: var(--ink); background: none; }
+.dash-tabs button[role="tab"]:active, .dash-tabs button[role="tab"]:first-child:active { background: none; border-color: transparent; color: var(--ink); }
+.dash-tabs button[role="tab"][aria-selected="true"]:active { border-bottom-color: var(--ink); }
+.dash-tabs button[role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); font-weight: 600; }
+.dash-tabs button[role="tab"]:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* which tab shows (index.qmd sets body.dash-tab-compare): the other tab's panel, Explore's Speed and
+   Rating on Compare, the set rows on Explore. Whole cells are hidden, so the filter row's gaps stay right. */
+body:not(.dash-tab-compare) #dash-compare,
+body.dash-tab-compare #dash-explore { display: none; }
+body:not(.dash-tab-compare) .dash-filters > .cell:has(.dash-set),
+body.dash-tab-compare .dash-filters > .cell:has(.ms):not(:has(.dash-set)) { display: none; }
+.dash-filters > .cell:has(.dash-set) { flex: 1 1 100%; }
+.dash-set { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.75rem; }
+.dash-set-k { display: inline-flex; align-items: center; gap: 0.4rem; font-weight: 700; color: var(--ink); min-width: 4.2rem; }
+.dash-swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; }
+@media (max-width: 575.98px) { .dash-set-k { min-height: 44px; } }
+.dash-cpanel { border-top: 1px solid var(--grid); padding-top: 1rem; margin-top: 1.5rem; }
+.dash-cpanel h2 { font-size: 1.25rem; margin: 0 0 0.25rem; border: none; }
+.dash-cpanel:not(:has(.dash-chart)) { display: none; }   /* nothing to show yet (no line, or Explore) */
+table.dash-ex-cmp th .dash-key { margin-right: 0.3rem; vertical-align: middle; }

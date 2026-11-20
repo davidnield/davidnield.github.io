@@ -270,6 +270,72 @@ export function attribution(ser, m0, m1, baselineMonths = 12) {
   return out;
 }
 
+// v2.1: attribution by calendar year (Explore panel 2 for a Classical OTB set). Each year of the window
+// (months m0..m1; a year cut by the window keeps only its months in it) pools its raw counts; per side,
+// W (White's plies) and B (Black's) are the products of that year's c_i = n_i / T_i, with
+// Var(log) = sum(1/n_i - 1/T_i). A side is "zero" when one of its moves has T_i > 0 games offered and
+// n_i = 0 played (its product is 0: not played), else "na" when a T_i is 0 (undefined), else "ok".
+// The baseline is the whole window pooled (the same rules on the window's summed counts; both sides must be
+// "ok", else there is no baseline); each year's parts are
+//   c_W = log(W_y) - log(W_base), c_B = log(B_y) - log(B_base)   (they add exactly to the net, log(WxB_y / WxB_base))
+// with 95% intervals c -/+ Z95 sqrt(v_y + v_base) (conservative: the year is part of the window). The net is -Infinity when
+// either side is "zero" (W x B = 0) and NaN when a side is "na". Same operation order as
+// python/build_opening_series.yearly_attribution.
+export const YEARLY_KEYS = ["N", "W", "B", "c_W", "c_W_lo", "c_W_hi", "c_B", "c_B_lo", "c_B_hi", "c_net"];
+
+export function yearlyAttribution(cnt, m0, m1, y0 = 2013) {
+  const L = cnt.T.length, years = [];
+  const sides = (a, b) => {
+    const s = (x) => { let t = 0; for (let m = a; m <= b; m++) t += x[m]; return t; };
+    const N = s(cnt.N), T = cnt.T.map(s), n = cnt.n.map(s);
+    const side = (k) => {
+      if (!(N > 0)) return { status: "nogames", v: NaN, vv: NaN, ply: -1 };
+      let v = 1, vv = 0, zero = -1, na = false;
+      for (let i = k; i < L; i += 2) {
+        if (!(T[i] > 0)) { na = true; continue; }
+        if (n[i] === 0) { if (zero < 0) zero = i; continue; }
+        v = v * (n[i] / T[i]);
+        vv = vv + (1 / n[i] - 1 / T[i]);
+      }
+      if (zero >= 0) return { status: "zero", v: 0, vv: NaN, ply: zero };
+      if (na) return { status: "na", v: NaN, vv: NaN, ply: -1 };
+      return { status: "ok", v, vv, ply: -1 };
+    };
+    return { N, T, n, w: side(0), b: side(1) };
+  };
+  for (let a = m0; a <= m1;) {
+    const y = y0 + Math.floor(a / 12), b = Math.min(m1, (y - y0) * 12 + 11);
+    years.push({ year: y, m0: a, m1: b, ...sides(a, b) });
+    a = b + 1;
+  }
+  const win = sides(m0, m1);
+  const base = win.w.status === "ok" && win.b.status === "ok" ? win : null;
+  const part = (r, k) => {
+    if (!base || r[k].status !== "ok") return { c: NaN, lo: NaN, hi: NaN };
+    const c = Math.log(r[k].v) - Math.log(base[k].v);
+    const h = Z95 * Math.sqrt(r[k].vv + base[k].vv);
+    return { c, lo: c - h, hi: c + h };
+  };
+  for (const r of years) {
+    const pw = part(r, "w"), pb = part(r, "b");
+    r.W = r.w.v; r.B = r.b.v;
+    r.c_W = pw.c; r.c_W_lo = pw.lo; r.c_W_hi = pw.hi;
+    r.c_B = pb.c; r.c_B_lo = pb.lo; r.c_B_hi = pb.hi;
+    r.c_net = !base ? NaN : r.w.status === "zero" || r.b.status === "zero" ? -Infinity
+      : r.w.status === "ok" && r.b.status === "ok" ? pw.c + pb.c : NaN;
+  }
+  return { base: !!base, base_W: base ? base.w.v : NaN, base_B: base ? base.b.v : NaN, years };
+}
+
+// as plain JSON (gate 4): statuses and zero plies kept, non-finite numbers -> null
+export function toPlainYearly(ya) {
+  const f = (x) => (Number.isFinite(x) ? x : null);
+  const out = { base: ya.base, base_W: f(ya.base_W), base_B: f(ya.base_B), year: ya.years.map((r) => r.year), status_W: ya.years.map((r) => r.w.status),
+    status_B: ya.years.map((r) => r.b.status), zero_ply_W: ya.years.map((r) => r.w.ply), zero_ply_B: ya.years.map((r) => r.b.ply) };
+  for (const k of YEARLY_KEYS) out[k] = ya.years.map((r) => f(r[k]));
+  return out;
+}
+
 // ---------------------------------------------------------------- loading
 
 // Monthly A, white wins W and draws D at a loaded node for a slice mask; null
@@ -424,7 +490,9 @@ export function makeStore(base, version = "") {
       if (!line.inTree) return { line, cnt: null };
       const cnt = await store.countsForOtb(line.edges, S.who, otbAs(S));
       const ser = monthly(cnt, smooth);
-      return { line, cnt, ser, att: attribution(ser, m0, m1), win: windowSummary(cnt, m0, m1) };
+      const y0 = +(await store.otbIndex()).first_month.slice(0, 4);
+      // v2.1: panel 2's OTB attribution is by calendar year (raw counts per year, not the rolling pool)
+      return { line, cnt, ser, att: attribution(ser, m0, m1), win: windowSummary(cnt, m0, m1), yearly: yearlyAttribution(cnt, m0, m1, y0) };
     },
     // v2.0: the explorer table for a set spec. OTB: the moves are the tree's (the Lichess file's
     // out), the games and results the OTB files'.

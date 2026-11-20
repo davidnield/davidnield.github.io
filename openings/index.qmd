@@ -7,7 +7,7 @@ format:
   html:
     # dash.css is linked with the release version (cache-busting), not via `css:`
     include-in-header:
-      text: '<link rel="stylesheet" href="dash.css?v=228b2592ec10">'
+      text: '<link rel="stylesheet" href="dash.css?v=80c62ab2330e">'
     toc: false
     page-layout: full
     anchor-sections: false
@@ -44,7 +44,7 @@ second question: if you always play the line, you get it whenever your *opponent
 // release stamped by python/stamp_release.py, so a deploy never mixes with a
 // browser's cached copy of the previous release (GitHub Pages sends max-age=600,
 // and module caches can outlive it).
-VERSION = "228b2592ec10"
+VERSION = "80c62ab2330e"
 asset = (path) => new URL(`${path}?v=${VERSION}`, document.baseURI).href
 dashMod = import(asset("dash.js"))
 boardMod = import(asset("board.js"))
@@ -592,6 +592,7 @@ xTicks = (P, w, ml) => P && !P.legacy ? { ticks: Math.max(2, Math.floor((w - ml 
     const r = await store.computeSet(moves, S, a, b, sm);
     const out = toPlain(r, a, b);
     out.explorer = await store.explorerSet(r.line.node, S, a, b);
+    if (r.yearly) out.yearly = dashMod.toPlainYearly(r.yearly);   // v2.1
     return out;
   };
   window.dashOtbIndex = () => store.otbIndex();
@@ -840,6 +841,11 @@ view2 === "Levels" ? D(`<p class="dash-sub"><b>W</b> = how often White makes Whi
 chance (1st move included); <b>B</b> = the same for Black. W × B is the dashed line in panel 1.</p>
 <div class="dash-legend"><span>${key(COL.white)} ${pside ? `W: ${esc(sideMoves("W"))}` : "W: White steers here"}</span><span>${key(COL.black)} ${pside ? `B: ${esc(sideMoves("B"))}` : "B: Black allows it"}</span>
 <span>shaded: 95% interval</span></div>`)
+: yearlyOn ? D(`<p class="dash-sub">By calendar year: each year's bars compare that year's games with the whole window's
+(all its games pooled, the 0% line). On a log scale the two parts add up exactly to the net change (black), with no
+interaction left over. Whiskers: 95% intervals. A dashed bar to the floor means that side never played its move that year.</p>
+<div class="dash-legend"><span>${key(COL.white, "box")} ${esc(yName("W"))}</span><span>${key(COL.black, "box")} ${esc(yName("B"))}</span>
+<span>${key(COL.ink, "thick")} Net change in W×B</span><span>│ 95% interval</span></div>`)
 : D(`<p class="dash-sub">Change since the start of the window (first 12 months, geometric mean). On a log scale the two
 contributions add up exactly to the net change, with no interaction left over.</p>
 <div class="dash-legend"><span>${key(COL.white, "box")} ${pside ? esc(sideMoves("W")) : "White's contribution"}</span><span>${key(COL.black, "box")} ${pside ? esc(sideMoves("B")) : "Black's contribution"}</span>
@@ -849,6 +855,7 @@ contributions add up exactly to the net change, with no interaction left over.</
 ```{ojs}
 //| output: false
 chart2 = (w, h, P) => {
+  if (view2 !== "Levels" && yearlyOn) return chart2y(w, h, P);   // v2.1: OTB attribution by calendar year
   const L = plotLayout(P, h, w, { hDefault: 300, mlBanner: 68, mlK: view2 === "Levels" ? 4.9 : 3.7 });
   if (view2 === "Levels") {
     return Plot.plot({
@@ -895,7 +902,99 @@ chart2 = (w, h, P) => {
 ```
 
 ```{ojs}
-chartWithDownload(chart2(Math.max(240, Math.min(width, 1100))), () => view2 === "Levels"
+//| output: false
+// ---- v2.1: panel 2's Attribution view for a Classical OTB set, by calendar year (dash.js yearlyAttribution).
+// Per year two bars from 0: White's part log(W_y / W_base) and Black's part log(B_y / B_base), with 95% whiskers,
+// and the net (their exact sum) as a black tick across the year. A side whose move had no games that year
+// (W or B = 0) gets a dashed bar to the floor, "not played", and the net a triangle at the floor.
+yearlyOn = srcE === "otb" && !!(res.cnt && res.yearly)
+yRows = yearlyOn ? res.yearly.years.map((r) => {
+  const start = monthDate(ix, r.m0), end = d3.utcMonth.offset(monthDate(ix, r.m1), 1), span = +end - +start;
+  return { ...r, start, end, mid: new Date(+start + span / 2), wx: new Date(+start + span / 4), bx: new Date(+start + 3 * span / 4),
+           partial: r.m1 - r.m0 + 1 < 12 };
+}) : []
+yMoveAt = (i) => `${Math.floor(i / 2) + 1}.${i % 2 ? ".." : ""} ${res.cnt.edges[i].san}`
+yName = (side) => pside ? sideMoves(side) : side === "W" ? "White's moves" : "Black's moves"
+// panel 2's note for the yearly view: the population, by calendar year (not the rolling 12 months of the other panels)
+popNoteYear = popNote.replace("rolling 12 months (each monthly point pools the trailing 12).", "by calendar year.")
+  .replace(/ No monthly W and B here:[^.]*\./, "")   // about the monthly panels, not this one
+yMonths = (r) => r.partial ? ` (${d3.utcFormat("%b")(monthDate(ix, r.m0))}–${d3.utcFormat("%b")(monthDate(ix, r.m1))})` : ""
+yPart = (r, side) => {
+  const s = side === "W" ? r.w : r.b;
+  if (s.status === "ok") return gapPct(side === "W" ? r.c_W : r.c_B);
+  if (s.status === "zero") return `not played (${yMoveAt(s.ply)})`;
+  return s.status === "nogames" ? "no games" : "—";
+}
+yTip = (r) => {
+  const ci = (c, l, u) => `${gapPct(c)}  (95%: ${gapPct(l)} to ${gapPct(u)})`;
+  const sideTxt = (side) => {
+    const s = side === "W" ? r.w : r.b;
+    if (s.status === "ok") return side === "W" ? ci(r.c_W, r.c_W_lo, r.c_W_hi) : ci(r.c_B, r.c_B_lo, r.c_B_hi);
+    if (s.status === "zero") return `not played (${yMoveAt(s.ply)}: 0 of ${d3.format(",")(r.T[s.ply])})`;
+    return s.status === "nogames" ? "no games" : "—";
+  };
+  return [`${r.year}${yMonths(r)}: ${d3.format(",")(r.N)} games (vs the window's average)`,
+    `${yName("W")}  ${sideTxt("W")}`, `${yName("B")}  ${sideTxt("B")}`,
+    `Net  ${r.c_net === -Infinity ? "not played" : gapPct(r.c_net)}`,
+    res.cnt.edges.map((e, i) => `${yMoveAt(i)} ${d3.format(",")(r.n[i])}/${d3.format(",")(r.T[i])}`).join(" · ")].join("\n");
+}
+chart2y = (w, h, P) => {
+  const L = plotLayout(P, h, w, { hDefault: 300, mlBanner: 68, mlK: 4.1 });
+  const fin = (x) => Number.isFinite(x);
+  // the axis follows the bars and the net (whiskers are clipped to it, so one noisy year cannot stretch it)
+  const vals = [0, ...yRows.flatMap((r) => [r.c_W, r.c_B, r.c_net])].filter(fin);
+  const lo0 = d3.min(vals), hi0 = d3.max(vals), span = Math.max(hi0 - lo0, Math.log(2));
+  const lo = lo0 - 0.12 * span, hi = hi0 + 0.12 * span;
+  const anyZero = yRows.some((r) => r.w.status === "zero" || r.b.status === "zero");
+  const floor = lo - (anyZero ? 0.18 : 0) * span, top = hi;
+  // ticks: the Compare gap chart's candidates, kept at least 1/(k-1) of the range apart walking out from 0
+  const cands = [-0.99, -0.98, -0.95, -0.9, -0.8, -0.75, -0.6, -0.5, -0.33, -0.2, -0.1, 0, 0.1, 0.25, 0.5, 1, 1.5, 2, 3, 4, 9, 19, 49, 99];
+  const ticks = cands.map((p) => Math.log(1 + p)).filter((t) => t >= lo - 1e-9 && t <= top);
+  const minGap = 0.9 * (top - floor) / Math.max(1, thinScreen(P, L, 7) - 1);
+  const walk = (side) => { const out = []; let last = 0;
+    for (const t of side) if (Math.abs(t - last) >= minGap) { out.push(t); last = t; }
+    return out; };
+  const spaced = [...walk(ticks.filter((t) => t < 0).sort((a, b) => b - a)).reverse(), 0, ...walk(ticks.filter((t) => t > 0).sort((a, b) => a - b))];
+  const bars = yRows.flatMap((r) => [
+    { side: "W", st: r.w.status, c: r.c_W, lo: r.c_W_lo, hi: r.c_W_hi, x1: r.start, x2: r.mid, x: r.wx },
+    { side: "B", st: r.b.status, c: r.c_B, lo: r.c_B_lo, hi: r.c_B_hi, x1: r.mid, x2: r.end, x: r.bx }]);
+  const ok = bars.filter((d) => d.st === "ok" && fin(d.c)), zero = bars.filter((d) => d.st === "zero");
+  // year labels centred on each year's bars (thinned to the export's x-tick budget)
+  const xt = xTicks(P, w, L.marginLeft);
+  const mids = yRows.map((r) => r.mid);
+  return Plot.plot({
+    width: w, ...L,
+    x: { type: "utc", label: null, domain: [monthDate(ix, m0), d3.utcMonth.offset(monthDate(ix, m1), 1)], ...xt,
+         ticks: thin(mids, xt.ticks ?? mids.length), tickFormat: d3.utcFormat("%Y") },
+    y: { label: "change vs the window's average (log scale)", domain: [floor, top], ticks: spaced, tickFormat: gapPct, grid: true },
+    color: { domain: ["W", "B"], range: [COL.white, COL.black] },   // "W"/"B", not "White"/"Black" (CSS colours)
+    marks: [
+      Plot.rectY(ok, { x1: "x1", x2: "x2", y1: 0, y2: "c", fill: "side", insetLeft: 1.5, insetRight: 1.5, fillOpacity: 0.9 }),
+      Plot.rectY(zero, { x1: "x1", x2: "x2", y1: 0, y2: floor, fill: "side", fillOpacity: 0.16, stroke: "side", strokeDasharray: "3,2",
+        insetLeft: 1.5, insetRight: 1.5, ariaLabel: () => "not-played" }),
+      Plot.text(zero, { x: "x", y: floor, text: () => "not played", rotate: -90, textAnchor: "start", lineAnchor: "middle", dx: 5,
+        fill: COL.prod, ariaLabel: () => "not-played-label" }),
+      Plot.ruleX(ok, { x: "x", y1: (d) => Math.max(d.lo, floor), y2: (d) => Math.min(d.hi, top), stroke: COL.ink, strokeOpacity: 0.7, strokeWidth: 1.25 }),
+      Plot.ruleY([0], { stroke: COL.ink, strokeOpacity: 0.4 }),
+      Plot.ruleY(yRows.filter((r) => fin(r.c_net)), { y: "c_net", x1: "start", x2: "end", stroke: COL.ink, strokeWidth: 2.75, insetLeft: 0.5, insetRight: 0.5 }),
+      Plot.dot(yRows.filter((r) => r.c_net === -Infinity), { x: "mid", y: floor, symbol: "triangle", rotate: 180, r: 4, fill: COL.ink }),
+      Plot.ruleX(yRows, Plot.pointerX({ x: "mid", stroke: COL.muted, strokeWidth: 1 })),
+      Plot.tip(yRows, Plot.pointerX({ x: "mid", y: (r) => fin(r.c_net) ? r.c_net : 0, title: yTip })),
+    ],
+  });
+}
+```
+
+```{ojs}
+chartWithDownload(chart2(Math.max(240, Math.min(width, 1100))), () => view2 !== "Levels" && yearlyOn
+  ? ({ ...exportSpec("Who moved it: by calendar year, vs the window's average", "who-moved-it-attribution", (w, h, P) => chart2(w, h, P), [
+      { label: yName("W"), color: COL.white, kind: "box" },
+      { label: yName("B"), color: COL.black, kind: "box" },
+      { label: "Net change in W×B (log scale; the parts add exactly)", color: COL.ink, kind: "line" },
+      { label: "whiskers: 95% intervals", color: COL.muted, kind: "line" }],
+    ""), subtitle: `Classical OTB, ${otbDesc(specE)}, by calendar year. ${chartName.subtitle}`,
+    footer: `${popNoteYear} Each year's games against the whole window's (all its games pooled). A dashed bar to the floor: that side never played its move that year. Whiskers: 95% intervals.` })
+  : view2 === "Levels"
   ? exportSpec("Who moved it: W and B", "who-moved-it-levels", (w, h, P) => chart2(w, h, P), [
       { label: pside ? `W: ${sideMoves("W")}` : "W: White steers here", color: COL.white, kind: "line" },
       { label: pside ? `B: ${sideMoves("B")}` : "B: Black allows it", color: COL.black, kind: "line" },
@@ -911,6 +1010,14 @@ chartWithDownload(chart2(Math.max(240, Math.min(width, 1100))), () => view2 === 
   const fmt = (t) => !Number.isFinite(t) ? "—" : `${t >= 0 ? "+" : ""}${Math.round(100 * (Math.exp(t) - 1))}%`;
   const last = rows.filter((d) => Number.isFinite(d.c_total)).slice(-12);
   const g = (k) => last.length ? d3.mean(last, (d) => d[k]) : NaN;
+  if (view2 === "Attribution" && yearlyOn) {   // v2.1: the last year with games vs the base year
+    const ya = res.yearly, last = [...yRows].reverse().find((r) => r.N > 0);
+    if (!ya.base || !last) return html`<div class="dash-note">${popNoteYear}</div><p class="dash-copy">This line was not played in this set over the window, so there is no average to compare years with.</p>`;
+    const net = last.c_net === -Infinity ? "not played" : gapPct(last.c_net);
+    return html`<div class="dash-note">${popNoteYear}</div><p class="dash-copy">${last.year}${yMonths(last)} vs the window's average: net <b>${net}</b>
+    = ${yName("W")} <b>${yPart(last, "W")}</b> and ${yName("B")} <b>${yPart(last, "B")}</b> (log parts, so they add exactly).
+    Hover a year for its moves' game counts.</p>`;
+  }
   return html`<div class="dash-note">${popNote}</div>
   ${view2 === "Attribution" ? html`<p class="dash-copy">Last 12 months vs the first 12 of the window: net <b>${fmt(g("c_total"))}</b>
   = ${pside ? esc(sideMoves("W")) : "White"} <b>${fmt(g("c_W"))}</b> and ${pside ? esc(sideMoves("B")) : "Black"} <b>${fmt(g("c_B"))}</b> (log contributions, so they add exactly).</p>` : ""}`;
@@ -1085,7 +1192,8 @@ recorded with the game (not peak ratings). Each **player** set holds one of 47 l
 every opponent and at every age, juniors' early games included; a game between two of the 47 counts in both players'
 sets. A month holds tens to a few hundred such games, so every OTB point pools a rolling 12 months (the trailing 12
 months of counts, with 95% intervals from the pooled counts), and Compare pools both sets the same way whenever either
-is OTB. OTB points have no minimum game count (Lichess points need 30 games at each step), so a point resting on a handful
+is OTB. For an OTB set, panel 2's attribution is drawn by calendar year (each year against the whole window's games
+pooled), so a year in which a side never played its move shows as "not played". OTB points have no minimum game count (Lichess points need 30 games at each step), so a point resting on a handful
 of games is shown with its wide interval; a player's line can rest on very few games. The 2020 gap is real: classical over-the-board events largely stopped during the pandemic. The moves are counted
 exactly as for Lichess (the first 30 plies, positions on the named-opening tree).
 The data cover the positions on the named lines and every move between two of them. Panel 1's win percentages are
@@ -1329,9 +1437,10 @@ cScoreDomain = {
 }
 cScoreTicks = (k) => {
   const [a, b] = cScoreDomain;
-  for (const st of [0.01, 0.02, 0.05, 0.1, 0.2]) {
+  // v2.1: 0.25 and 0.5 steps too, for a few-game OTB set whose scores span most of 0..1 (labels collided at Wide)
+  for (const st of [0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5]) {
     const t = d3.range(Math.ceil(a / st - 1e-9), Math.floor(b / st + 1e-9) + 1).map((i) => +(i * st).toFixed(2));
-    if (t.length <= k || st === 0.2) return t;
+    if (t.length <= k || st === 0.5) return t;
   }
 }
 cchart3 = (w, h, P) => { const L = plotLayout(P, h, w, { hDefault: 300, mlBanner: 68, mlK: 3.6 }); return Plot.plot({

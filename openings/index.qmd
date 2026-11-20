@@ -7,7 +7,7 @@ format:
   html:
     # dash.css is linked with the release version (cache-busting), not via `css:`
     include-in-header:
-      text: '<link rel="stylesheet" href="dash.css?v=f97aa6cf64a3">'
+      text: '<link rel="stylesheet" href="dash.css?v=228b2592ec10">'
     toc: false
     page-layout: full
     anchor-sections: false
@@ -44,7 +44,7 @@ second question: if you always play the line, you get it whenever your *opponent
 // release stamped by python/stamp_release.py, so a deploy never mixes with a
 // browser's cached copy of the previous release (GitHub Pages sends max-age=600,
 // and module caches can outlive it).
-VERSION = "f97aa6cf64a3"
+VERSION = "228b2592ec10"
 asset = (path) => new URL(`${path}?v=${VERSION}`, document.baseURI).href
 dashMod = import(asset("dash.js"))
 boardMod = import(asset("board.js"))
@@ -471,11 +471,11 @@ sideWho = (side) => !pside ? null : ((side === "W") === (pside === "white") ? pn
 sideMoves = (side) => `${sideWho(side) === "Opponents" ? "Opponents'" : `${sideWho(side)}'s`} moves (${side === "W" ? "White" : "Black"})`
 popNote = {
   if (srcE === "otb") {
-    // v2.0: a thin OTB set leaves months (or every month) below the 30-game rule; say why a line is missing
+    // v2.0.1: no minimum game count for OTB, so a point is missing only where no game supports it; say why
     const noWB = rows.length > 0 && !rows.some((d) => Number.isFinite(d.W));
     const noReach = rows.length > 0 && !rows.some((d) => Number.isFinite(d.reach));
-    const thin = noReach ? " Too few games for any monthly point here: a month needs 30 games in its 12 months; the window figures pool the whole window."
-      : noWB ? " Too few games for monthly W and B here: each position along the line needs 30 games in a point's 12 months; the window figures pool the whole window." : "";
+    const thin = noReach ? " No game in this set reaches this position in the window."
+      : noWB ? " No monthly W and B here: in every point's 12 months some move of this order was not played." : "";
     return `Classical OTB, ${otbDesc(specE)}, ${monthLabel(ix, m0)}–${monthLabel(ix, m1)}, rolling 12 months (each monthly point pools the trailing 12).${thin}`;
   }
   const sp = speeds.length === ix.speeds.length ? "all speeds" : (speeds.join(" + ") || "no speeds");
@@ -1044,7 +1044,7 @@ chart3 = (w, h, P) => {
   const body = res.cnt.edges.map((e, i) => {
     const side = (i % 2 === 0 ? "White" : "Black") + (pside ? ` (${esc(sideWho(i % 2 === 0 ? "W" : "B"))})` : "");
     const col = i % 2 === 0 ? COL.white : COL.black;
-    const thin = T[i] < 30 || n[i] < 1;
+    const thin = T[i] < (srcE === "otb" ? 1 : 30) || n[i] < 1;   // v2.0.1: no minimum game count for OTB
     const label = `${Math.floor(i / 2) + 1}.${i % 2 === 0 ? "" : ".."} ${esc(e.san)}`;
     const bar = Number.isFinite(c[i]) ? `<span class="dash-bar" style="width:${Math.max(1, 160 * c[i])}px;background:${col}"></span>` : "";
     return `<tr class="${c[i] === minC ? "rare" : ""}"><td>${i + 1}</td><td>${key(col)} ${side}</td><td class="dash-moves">${label}</td>
@@ -1085,7 +1085,8 @@ recorded with the game (not peak ratings). Each **player** set holds one of 47 l
 every opponent and at every age, juniors' early games included; a game between two of the 47 counts in both players'
 sets. A month holds tens to a few hundred such games, so every OTB point pools a rolling 12 months (the trailing 12
 months of counts, with 95% intervals from the pooled counts), and Compare pools both sets the same way whenever either
-is OTB. The 2020 gap is real: classical over-the-board events largely stopped during the pandemic. The moves are counted
+is OTB. OTB points have no minimum game count (Lichess points need 30 games at each step), so a point resting on a handful
+of games is shown with its wide interval; a player's line can rest on very few games. The 2020 gap is real: classical over-the-board events largely stopped during the pandemic. The moves are counted
 exactly as for Lichess (the first 30 plies, positions on the named-opening tree).
 The data cover the positions on the named lines and every move between two of them. Panel 1's win percentages are
 the results of the games that reach a named opening's final position by any move order, counted from White's side. Board: chess.js (BSD-2-Clause).

@@ -21,6 +21,9 @@
 
 export const Z95 = 1.959963984540054;
 export const MIN_T = 30;
+// v2.0.1 (owner, 2026-11-19): no minimum game count for classical OTB sets. A month is then left out only
+// where a value is undefined (a move of the line with no games, no game reaching the position).
+export const OTB_MIN_T = 1;
 
 export function monthLabel(index, i) {
   const [y0, m0] = index.first_month.split("-").map(Number);
@@ -92,11 +95,12 @@ export function pool(x, smooth) {
   return y;
 }
 
-// Metrics for one month (scalars): N, A numbers; T, n arrays over plies.
-export function metricsAt(N, T, n, A) {
+// Metrics for one month (scalars): N, A numbers; T, n arrays over plies. minT: the set's minimum
+// game count (Lichess MIN_T; v2.0.1 OTB OTB_MIN_T).
+export function metricsAt(N, T, n, A, minT = MIN_T) {
   const L = T.length;
   let valid = true;
-  for (let i = 0; i < L; i++) if (!(T[i] >= MIN_T) || !(n[i] >= 1)) valid = false;
+  for (let i = 0; i < L; i++) if (!(T[i] >= minT) || !(n[i] >= 1)) valid = false;
   const c = new Array(L);
   let W = 1, B = 1, vW = 0, vB = 0;
   for (let i = 0; i < L; i++) {
@@ -105,7 +109,7 @@ export function metricsAt(N, T, n, A) {
     if (i % 2 === 0) { W = W * c[i]; vW = vW + v; } else { B = B * c[i]; vB = vB + v; }
   }
   const WxB = W * B;
-  const rvalid = N >= MIN_T && A >= 1;
+  const rvalid = N >= minT && A >= 1;
   const reach = A / N, vR = 1 / A - 1 / N;
   const P = (x) => (valid ? x : NaN), R = (x) => (rvalid ? x : NaN), PR = (x) => (valid && rvalid ? x : NaN);
   return {
@@ -130,11 +134,11 @@ export function metricsAt(N, T, n, A) {
 // counts of the A games arriving by any move order: W white wins, D draws,
 // black = A - W - D. Score is White's view, (W + D/2)/A; its 95% interval is
 // the normal one on the per-game score (1, 1/2, 0), clipped to [0, 1].
-// Suppressed (NaN) when A < MIN_T. Same operation order as the Python.
+// Suppressed (NaN) when A < minT (MIN_T; v2.0.1 OTB: OTB_MIN_T). Same operation order as the Python.
 export const RESULT_KEYS = ["win_w", "win_d", "win_b", "score", "score_lo", "score_hi", "res_n"];
 
-export function resultsAt(A, W, D) {
-  if (!(A >= MIN_T)) { const out = {}; for (const k of RESULT_KEYS) out[k] = NaN; return out; }
+export function resultsAt(A, W, D, minT = MIN_T) {
+  if (!(A >= minT)) { const out = {}; for (const k of RESULT_KEYS) out[k] = NaN; return out; }
   const score = (W + D / 2) / A;
   const half = Z95 * Math.sqrt(Math.max(0, (W + D / 4) / A - score * score) / A);
   return {
@@ -159,10 +163,11 @@ export function monthly(cnt, smooth) {
   const T = cnt.T.map((x) => pool(x, smooth)), n = cnt.n.map((x) => pool(x, smooth));
   const R = cnt.R ? { A: pool(cnt.R.A, smooth), W: pool(cnt.R.W, smooth), D: pool(cnt.R.D, smooth) } : null;
   const M = N.length, out = { valid: new Array(M), reach_valid: new Array(M), c: [] };
+  const minT = cnt.minT ?? MIN_T;   // v2.0.1: the set's minimum game count (OTB: 1)
   for (const k of SERIES_KEYS) out[k] = new Float64Array(M);
   for (let m = 0; m < M; m++) {
-    const r = metricsAt(N[m], T.map((x) => x[m]), n.map((x) => x[m]), A[m]);
-    Object.assign(r, resultsAt(R ? R.A[m] : NaN, R ? R.W[m] : NaN, R ? R.D[m] : NaN));
+    const r = metricsAt(N[m], T.map((x) => x[m]), n.map((x) => x[m]), A[m], minT);
+    Object.assign(r, resultsAt(R ? R.A[m] : NaN, R ? R.W[m] : NaN, R ? R.D[m] : NaN, minT));
     for (const k of SERIES_KEYS) out[k][m] = r[k];
     out.valid[m] = r.valid; out.reach_valid[m] = r.reach_valid; out.c.push(r.c);
   }
@@ -173,8 +178,9 @@ export function monthly(cnt, smooth) {
 // Raw counts pooled over months m0..m1 inclusive.
 export function windowSummary(cnt, m0, m1) {
   const s = (x) => { let t = 0; for (let m = m0; m <= m1; m++) t += x[m]; return t; };
-  const r = metricsAt(s(cnt.N), cnt.T.map(s), cnt.n.map(s), s(cnt.A));
-  Object.assign(r, cnt.R ? resultsAt(s(cnt.R.A), s(cnt.R.W), s(cnt.R.D)) : resultsAt(NaN, NaN, NaN));
+  const minT = cnt.minT ?? MIN_T;
+  const r = metricsAt(s(cnt.N), cnt.T.map(s), cnt.n.map(s), s(cnt.A), minT);
+  Object.assign(r, cnt.R ? resultsAt(s(cnt.R.A), s(cnt.R.W), s(cnt.R.D), minT) : resultsAt(NaN, NaN, NaN, minT));
   r.T = cnt.T.map(s); r.n = cnt.n.map(s); r.N = s(cnt.N); r.A = s(cnt.A);
   return r;
 }
@@ -407,6 +413,7 @@ export function makeStore(base, version = "") {
         // results at a named final position (all zero where no OTB game there has a result)
         R: ix.resultsAt.has(finId) ? { A, W: sumRuns(fin.R?.[0], mask, M), D: sumRuns(fin.R?.[1], mask, M) } : null,
         edges,
+        minT: OTB_MIN_T,   // v2.0.1: no minimum game count for OTB
       };
     },
     // v2.0: compute for a set spec (Lichess { speeds, bands } or OTB { src: "otb", who, as }).

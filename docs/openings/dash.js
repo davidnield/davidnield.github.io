@@ -9,7 +9,15 @@
 //                        child, all-time results]] (edges out of it), and at a
 //                        named final position R [runs(white wins), runs(draws)]
 //   data/positions.json  lazy: FEN-prefix key -> node, for re-entering the tree
+//   data/otb/index.json  v2.0, lazy (only once a set's Source is Classical OTB Games): the classical
+//                        over-the-board family (python/build_otb_data.py). Slices: 0 SuperGMs, then
+//                        each roster player as White and as Black; months 2013-01..2026-10; "nodes"
+//                        lists the positions that have a file, "who" the roster.
+//   data/otb/nodes/<id>.json  as data/nodes/<id>.json, only the edges with OTB games
 // A series is sparse runs [slice, firstMonth, code].
+//
+// v2.0 sets: { src: "lichess", speeds, bands } (or v1.9's { speeds, bands }) | { src: "otb", who, as },
+// who = "supergm" or a player slug, as = "either" | "white" | "black" (ignored for SuperGMs).
 
 export const Z95 = 1.959963984540054;
 export const MIN_T = 30;
@@ -65,9 +73,16 @@ export function sliceMask(index, speeds, bands) {
   return index.slices.map(([s, b]) => speeds.includes(index.speeds[s]) && bands.includes(index.bands[b]));
 }
 
-// Centered 3-month count pooling, clipped at the ends of the data range.
+// Count pooling: 1 none; 3 centred over m-1, m, m+1, clipped at the ends of the data range;
+// 12 (v2.0, classical OTB, and Compare whenever either set is OTB) trailing over m-11..m, clipped
+// at the first month.
 export function pool(x, smooth) {
   if (smooth === 1) return x;
+  if (smooth === 12) {
+    const n = x.length, y = new Float64Array(n);
+    for (let i = 0; i < n; i++) { let t = 0; for (let k = Math.max(0, i - 11); k <= i; k++) t += x[k]; y[i] = t; }
+    return y;
+  }
   const n = x.length, y = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     y[i] = x[i];
@@ -187,9 +202,10 @@ export function gapAt(a, b) {
 
 // Monthly gap series over the whole data range from two store.compute results (same line, same
 // smoothing): W, B, WxB, reach from each set's series, N and A pooled exactly as monthly() pools them.
+// v2.0: a Lichess set (163 months) against an OTB set (166) is compared over their common months.
 export function compareSeries(ra, rb, smooth) {
   const NA = pool(ra.cnt.N, smooth), AA = pool(ra.cnt.A, smooth), NB = pool(rb.cnt.N, smooth), AB = pool(rb.cnt.A, smooth);
-  const M = NA.length, out = {};
+  const M = Math.min(NA.length, NB.length), out = {};
   for (const k of COMPARE_KEYS) out[k] = new Float64Array(M);
   const at = (s, N, A, m) => ({ W: s.W[m], B: s.B[m], WxB: s.WxB[m], reach: s.reach[m], N: N[m], A: A[m] });
   for (let m = 0; m < M; m++) {
@@ -201,9 +217,32 @@ export function compareSeries(ra, rb, smooth) {
 
 // Sets: { speeds: [...], bands: [...] }. The same = the same slice selection; they overlap when they
 // share at least one speed and one rating band (some games count in both).
+// v2.0: an OTB set { src: "otb", who, as }. Two OTB sets are the same when they select the same
+// slices (same who and, for a player, the same colour choice). They can share games whenever both are
+// OTB and not the same player's two colours: a game between two roster players is in both players'
+// sets, and a roster player's elite games are in SuperGMs too. Lichess and OTB never share games.
 const sameMembers = (x, y) => x.length === y.length && x.every((v) => y.includes(v));
-export const sameSets = (A, B) => sameMembers(A.speeds, B.speeds) && sameMembers(A.bands, B.bands);
-export const setsOverlap = (A, B) => A.speeds.some((s) => B.speeds.includes(s)) && A.bands.some((b) => B.bands.includes(b));
+export const srcOf = (S) => (S && S.src === "otb" ? "otb" : "lichess");
+export const otbAs = (S) => (S.who === "supergm" ? "either" : (S.as === "white" || S.as === "black" ? S.as : "either"));
+export const sameSets = (A, B) => {
+  if (srcOf(A) !== srcOf(B)) return false;
+  if (srcOf(A) === "otb") return A.who === B.who && otbAs(A) === otbAs(B);
+  return sameMembers(A.speeds, B.speeds) && sameMembers(A.bands, B.bands);
+};
+export const setsOverlap = (A, B) => {
+  if (srcOf(A) !== srcOf(B)) return false;
+  if (srcOf(A) === "otb") {
+    const a = otbAs(A), b = otbAs(B);
+    return !(A.who === B.who && A.who !== "supergm" && a !== "either" && b !== "either" && a !== b);
+  }
+  return A.speeds.some((s) => B.speeds.includes(s)) && A.bands.some((b) => B.bands.includes(b));
+};
+
+// v2.0: the OTB slices one set selects (index.slices = [[who, "" | "w" | "b"], ...]).
+export function otbMask(oix, who, as) {
+  const col = who === "supergm" ? null : ({ white: "w", black: "b" })[as] ?? null;
+  return oix.slices.map(([w, c]) => w === who && (col === null || c === col));
+}
 
 // Log-space attribution over the window (python/attribution.py): baseline =
 // geometric mean over the window's first 12 unsuppressed months.
@@ -251,6 +290,7 @@ export const posKey4 = (fen) => fen.split(" ").slice(0, 4).join(" ");
 export function makeStore(base, version = "") {
   const cache = new Map();
   let positions = null;
+  const otb = { index: null, cache: new Map() };   // v2.0: data/otb/, loaded on first use
   const q = version ? `?v=${encodeURIComponent(version)}` : "";
   const getJSON = (url) => fetch(url + q).then((r) => { if (!r.ok) throw new Error(`${url}: ${r.status}`); return r.json(); });
   const store = {
@@ -328,6 +368,79 @@ export function makeStore(base, version = "") {
         edges,
       };
     },
+    // v2.0: the classical OTB family, fetched only when a set first uses it.
+    otbIndex() {
+      if (!otb.index) {
+        otb.index = getJSON(`${base}/otb/index.json`).then((ix) => {
+          ix.hasFile = new Set(ix.nodes);
+          ix.resultsAt = new Set(ix.results_nodes);
+          ix.byWho = new Map(ix.who.map((w) => [w.id, w]));
+          return ix;
+        });
+      }
+      return otb.index;
+    },
+    async otbNode(id) {
+      const ix = await store.otbIndex();
+      if (!ix.hasFile.has(id)) return {};   // no OTB game reaches this position
+      if (!otb.cache.has(id)) otb.cache.set(id, getJSON(`${base}/otb/nodes/${id}.json`));
+      return otb.cache.get(id);
+    },
+    // OTB counts along an in-tree chain of edges for one OTB set (the line is followed on the
+    // Lichess tree, store.resolve; node and edge ids are shared).
+    async countsForOtb(edges, who, as) {
+      const ix = await store.otbIndex();
+      const mask = otbMask(ix, who, as);
+      const M = ix.n_months;
+      const parents = await Promise.all(edges.map((e) => store.otbNode(e.parent)));
+      const kids = await Promise.all(edges.map((e) => store.otbNode(e.child)));
+      const fin = kids[kids.length - 1], finId = edges[edges.length - 1].child;
+      const Tfin = sumRuns(fin.T, mask, M);
+      let A;
+      if (fin.A) A = sumRuns(fin.A, mask, M);
+      else { const D = sumRuns(fin.D, mask, M); A = new Float64Array(M); for (let m = 0; m < M; m++) A[m] = Tfin[m] + D[m]; }
+      return {
+        N: sumRuns(ix.N, mask, M),
+        T: parents.map((nd) => sumRuns(nd.T, mask, M)),
+        n: edges.map((e, i) => sumRuns((kids[i].in || []).find((r) => r[0] === e.parent && r[1] === e.san)?.[2], mask, M)),
+        A,
+        // results at a named final position (all zero where no OTB game there has a result)
+        R: ix.resultsAt.has(finId) ? { A, W: sumRuns(fin.R?.[0], mask, M), D: sumRuns(fin.R?.[1], mask, M) } : null,
+        edges,
+      };
+    },
+    // v2.0: compute for a set spec (Lichess { speeds, bands } or OTB { src: "otb", who, as }).
+    // A Lichess spec runs exactly store.compute.
+    async computeSet(moves, S, m0, m1, smooth) {
+      if (srcOf(S) === "lichess") return store.compute(moves, S.speeds, S.bands, m0, m1, smooth);
+      const line = await store.resolve(moves);
+      if (!line.inTree) return { line, cnt: null };
+      const cnt = await store.countsForOtb(line.edges, S.who, otbAs(S));
+      const ser = monthly(cnt, smooth);
+      return { line, cnt, ser, att: attribution(ser, m0, m1), win: windowSummary(cnt, m0, m1) };
+    },
+    // v2.0: the explorer table for a set spec. OTB: the moves are the tree's (the Lichess file's
+    // out), the games and results the OTB files'.
+    async explorerSet(nodeId, S, m0, m1) {
+      if (srcOf(S) === "lichess") return store.explorer(nodeId, S.speeds, S.bands, m0, m1);
+      const ix = await store.otbIndex();
+      const mask = otbMask(ix, S.who, otbAs(S));
+      const M = ix.n_months;
+      const tree = await store.node(nodeId), nd = await store.otbNode(nodeId);
+      const win = (x) => { let t = 0; for (let m = m0; m <= m1; m++) t += x[m]; return t; };
+      const T = win(sumRuns(nd.T, mask, M));
+      const outs = tree.out || [];
+      const kids = await Promise.all(outs.map((o) => store.otbNode(o[1])));
+      const wdlOf = new Map((nd.out || []).map((o) => [o[0], o[2]]));
+      const rows = outs.map((o, i) => {
+        const n = win(sumRuns((kids[i].in || []).find((r) => r[0] === nodeId && r[1] === o[0])?.[2], mask, M));
+        const wdl = [0, 0, 0];
+        for (const [sl, code] of wdlOf.get(o[0]) || []) if (mask[sl]) { const t = decodeTuple(code); wdl[0] += t[0]; wdl[1] += t[1]; wdl[2] += t[2]; }
+        return { san: o[0], child: o[1], n, share: T ? n / T : NaN, wdl };
+      });
+      const other = T - rows.reduce((a, r) => a + r.n, 0);
+      return { T, rows, other, other_share: T ? other / T : NaN };
+    },
     // Everything the panels show for a line; null when no move is in the tree.
     async compute(moves, speeds, bands, m0, m1, smooth) {
       const line = await store.resolve(moves);
@@ -337,9 +450,10 @@ export function makeStore(base, version = "") {
       return { line, cnt, ser, att: attribution(ser, m0, m1), win: windowSummary(cnt, m0, m1) };
     },
     // v1.9, the Compare tab: the line under Set A and Set B, and the gap between them.
+    // v2.0: A and B may be OTB sets (store.computeSet); the page pools both at 12 months then.
     async compare(moves, A, B, m0, m1, smooth) {
-      const [a, b] = await Promise.all([store.compute(moves, A.speeds, A.bands, m0, m1, smooth),
-        store.compute(moves, B.speeds, B.bands, m0, m1, smooth)]);
+      const [a, b] = await Promise.all([store.computeSet(moves, A, m0, m1, smooth),
+        store.computeSet(moves, B, m0, m1, smooth)]);
       const out = { line: a.line, a, b, same: sameSets(A, B), overlap: setsOverlap(A, B), ser: null, win: null };
       if (a.cnt) { out.ser = compareSeries(a, b, smooth); out.win = gapAt(a.win, b.win); }
       return out;

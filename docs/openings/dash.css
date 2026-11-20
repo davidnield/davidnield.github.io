@@ -198,3 +198,58 @@ body.dash-tab-compare .dash-filters > .cell:has(.ms):not(:has(.dash-set)) { disp
 .dash-cpanel h2 { font-size: 1.25rem; margin: 0 0 0.25rem; border: none; }
 .dash-cpanel:not(:has(.dash-chart)) { display: none; }   /* nothing to show yet (no line, or Explore) */
 table.dash-ex-cmp th .dash-key { margin-right: 0.3rem; vertical-align: middle; }
+
+/* ---- v2.0: the Classical OTB Games source: Source, Who (combobox) and Plays as ---- */
+/* Explore's own filters (index.qmd sets body.dash-src-otb, .dash-who-player, .dash-pool-fixed):
+   Lichess shows Speed and Rating, OTB shows Who and, for a player, Plays as; none of them on Compare. */
+body.dash-tab-compare .dash-filters > .cell:has(.dash-explore-only),
+body.dash-src-otb:not(.dash-tab-compare) .dash-filters > .cell:has(.ms):not(:has(.dash-set)),
+body:not(.dash-src-otb) .dash-filters > .cell:has(.cmb.dash-explore-only),
+body:not(.dash-src-otb) .dash-filters > .cell:has(.dash-as.dash-explore-only),
+body:not(.dash-who-player) .dash-filters > .cell:has(.dash-as.dash-explore-only) { display: none; }
+/* pooling: the 3-month toggle for Lichess-only views, a fixed "Rolling 12 months" note with any OTB set */
+body.dash-pool-fixed .dash-filters > .cell:has(.dash-pool-toggle),
+body:not(.dash-pool-fixed) .dash-filters > .cell:has(.dash-pool-note) { display: none; }
+.dash-pool-note { font-weight: 700; color: var(--ink-2); border: 1px dashed #c9c8c0; border-radius: 4px; padding: 0.2rem 0.6rem;
+  display: inline-flex; align-items: center; white-space: nowrap; }
+@media (max-width: 575.98px) { .dash-pool-note { min-height: 44px; box-sizing: border-box; } }
+/* inside a Compare set row */
+.dash-set.is-otb .ms, .dash-set:not(.is-otb) .cmb, .dash-set:not(.is-otb) .dash-as, .dash-set:not(.is-player) .dash-as { display: none; }
+
+/* a labelled native select (Source, Plays as) */
+.sel { display: inline-flex; align-items: center; gap: 0.4rem; }
+.sel-label, .cmb-label { font-weight: 700; color: var(--ink-2); }
+.sel-box { font: inherit; font-weight: 700; color: var(--ink-2); background: var(--surface); border: 1px solid #c9c8c0;
+  border-radius: 4px; padding: 0.2rem 1.6rem 0.2rem 0.6rem; cursor: pointer; max-width: 100%;
+  -webkit-appearance: none; appearance: none;   /* no grey system face in WebKit; the caret is drawn */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0h10L5 6z' fill='%2352514e'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 0.55rem center; }
+.sel-box:hover { border-color: var(--ink-2); }
+.sel-box:focus-visible { outline: 2px solid var(--c-white); outline-offset: 1px; }
+
+/* the Who combobox: a text field with a fixed-position listbox (never clipped by Quarto's cells) */
+.cmb { display: inline-flex; align-items: center; gap: 0.4rem; position: relative; }
+.cmb-field { display: inline-flex; align-items: stretch; border: 1px solid #c9c8c0; border-radius: 4px; background: var(--surface); }
+.cmb-field:hover { border-color: var(--ink-2); }
+.cmb-field:focus-within { outline: 2px solid var(--c-white); outline-offset: 1px; }
+.cmb-input { font: inherit; font-weight: 700; color: var(--ink-2); border: none; background: none; padding: 0.2rem 0.5rem;
+  width: 14rem; max-width: 60vw; outline: none; }
+.cmb-arrow { font: inherit; color: var(--ink-2); background: none; border: none; border-left: 1px solid var(--grid);
+  padding: 0 0.5rem; cursor: pointer; }
+.cmb-list { position: fixed; z-index: 1000; top: 0; left: 0; margin: 0; padding: 0.25rem 0; list-style: none; box-sizing: border-box;
+  background: var(--surface); border: 1px solid #c9c8c0; border-radius: 6px; box-shadow: 0 6px 18px rgba(0,0,0,.12);
+  max-height: 22rem; overflow-y: auto; overscroll-behavior: contain; }
+.cmb-opt { display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 0.3rem 0.75rem; cursor: pointer; }
+.cmb-opt[aria-selected="true"] { font-weight: 700; }
+.cmb-opt.active, .cmb-opt:hover { background: var(--surface-2); }
+.cmb-opt.active { box-shadow: inset 3px 0 0 var(--c-white); }
+.cmb-hint { color: var(--muted); font-size: 0.85em; white-space: nowrap; font-weight: 400; }
+.cmb-empty { padding: 0.3rem 0.75rem; color: var(--muted); }
+.cmb-status { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+@media (max-width: 575.98px) {
+  .sel-box, .cmb-field { min-height: 44px; box-sizing: border-box; }
+  .cmb-input { font-size: 16px; width: 12rem; }   /* 16px: iOS does not zoom the page on focus */
+  .cmb-arrow { min-width: 44px; }
+  .cmb-opt, .cmb-empty { min-height: 44px; font-size: 1rem; }
+}
+@media (pointer: coarse) { .cmb-opt { min-height: 44px; } }
